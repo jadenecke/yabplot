@@ -21,11 +21,13 @@ the idea is simple. while there are already amazing visualization tools availabl
 ## installation
 
 ```bash
-uv add yabplot
+uv add yabplot # to install
+uv sync --upgrade-package yabplot # to update
 ```
 or
 ```bash
-pip install yabplot
+pip install yabplot # to install
+pip install yabplot --upgrade # to update
 ```
 
 dependencies: python 3.11 with ipywidgets, nibabel, pandas, pooch, pyvista, scikit-image, trame, trame-vtk, trame-vuetify
