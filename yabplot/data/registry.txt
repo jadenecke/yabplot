@@ -8,9 +8,8 @@ cortical-schaefer_1000.zip sha256:a10448f101a874499d41bc62508c3af29120634955f48b
 subcortical-aseg.zip sha256:a901a7fc6a39f9bdaf2ef2bafbcde1fbc085b225d99e6730c727650d9be047d5 https://osf.io/5cs7y/download
 subcortical-brainnetome_sc.zip sha256:8301fdf6af109af52a2cf9b06d15486345d457b69cb86169ed38332a34a681c0 https://osf.io/2fsg5/download
 subcortical-jhu.zip sha256:b0ca292589a9f041851dba8159bb605a4657323e4305ba1570a304944b28d0de https://osf.io/x5fhg/download
-subcortical-musus100.zip sha256:7bc0d5b6a7e90a18cf8399f76976202d0263ff4e6823f375833bf0073fb89f9e https://osf.io/mwgz8/download
-subcortical-musus100_dbn.zip sha256:a024c048d0210c1699b52aa867d7147f1000168b2a2fdd99f499ee087e23f1d6 https://osf.io/fsv3b/download
-subcortical-musus100_tha.zip sha256:175d5d68eddc5a4b1d5d04cec06d825618cede75b51a5870a3942e737f70bd52 https://osf.io/aj68e/download
+subcortical-musus100_dbn.zip sha256:1d865832a35570a8c67f79d5049b58c548d25cf4fe1853164c384193b6712e40 https://osf.io/eutmb/download
+subcortical-tian2020_sc.zip sha256:8b5caf8bf0cdcf8e259a3532fbcb232f8746d68fc734ca9806d10e70cf8707a3 https://osf.io/jrvgp/download
 tracts-hcp1065_medium.zip sha256:366bb100074cf7b1e55586e5468653f0c342e42cfdd91dca6d99b6fde82f06ff https://osf.io/kjf8e/download
 tracts-hcp1065_small.zip sha256:020f23059c3a20ee0dda8ad12cd3df99b9fe5d3b37e7a6b9ae34b8a52b4b4346 https://osf.io/ynpa5/download
 tracts-hcp1065_tiny.zip sha256:54380d82f5cd234029c6fc011910e00f0ad859fdb6c22c6aaa6452d055449ae9 https://osf.io/jzk7p/download

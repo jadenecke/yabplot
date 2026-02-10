@@ -57,6 +57,7 @@ plugins:
 nav:
   - home: index.md
   - tutorials:
+      - available atlases: tutorials/available_atlases.ipynb
       - getting started: tutorials/getting_started.ipynb
       - data mapping: tutorials/data_mapping.ipynb
       - plot styling: tutorials/plot_styling.ipynb
