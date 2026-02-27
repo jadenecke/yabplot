@@ -17,5 +17,9 @@ tracts-xtract_large.zip sha256:e2d59e9f90b024018788af87e389f93b2fa9ac21360460196
 tracts-xtract_medium.zip sha256:f095028d3dfc0f974ebef1feffe4006b5bac1366325a784ea2301c56f583b1e7 https://osf.io/7tbjg/download
 tracts-xtract_small.zip sha256:9d3fe2c57acb87e8d13eb40a49a6c2c354dbe1a020122b693e9bf713e57cad5b https://osf.io/bmn3a/download
 tracts-xtract_tiny.zip sha256:469f9ed8ed5ceb7f8e17c9a0a92f1491d540814f832ef56441a7539532111f41 https://osf.io/a73x2/download
-bmesh-conte69.zip sha256:5ba9ffc89ae7f640590a80fc188d277b1b49a34a0bd99c0c9e5cfb52fc963cac https://osf.io/h4ugr/download
-bmesh-fsaverage.zip sha256:bccec9e3fc10ffc9d1cbdb6ad2b0ffd81c93ca0fa8d26fc530d9b4d58dfcd7a0 https://osf.io/sq7am/download
+bmesh-inflated.zip sha256:ba72f9e75f16fe767f6bbcec5c98381f6a20b2f5e2092505b4692844a1686461 https://osf.io/kfzjg/download
+bmesh-midthickness.zip sha256:ef8209853e1dac8804a60b5cde0b653ef2f6c77b6c7536f7acaa69a46dbb06c0 https://osf.io/xaktf/download
+bmesh-pial.zip sha256:5e36ba7883dd2a88485fc45c9166ed48e22db607d45655242961242b51f9f126 https://osf.io/knpg8/download
+bmesh-swm.zip sha256:1a516c070cb63557751d841d5cf75772660872b89ec749ee19c23298d77fa807 https://osf.io/hpbc9/download
+bmesh-very_inflated.zip sha256:8c33a00c718a47f0af118ce2c5804a2adf13d79be05c4665ca26582e3e8dd977 https://osf.io/xp9jr/download
+bmesh-white.zip sha256:b885ac1a4dcdf9e241a97e8d3ca59d7b1c86d8a3ebe17df512993bc5c1c0354a https://osf.io/wfc5t/download

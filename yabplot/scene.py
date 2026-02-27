@@ -91,7 +91,7 @@ def setup_plotter(sel_views, layout, figsize, display_type, needs_bottom_row=Tru
         row_weights = None
 
     plotter = pv.Plotter(shape=(nrows, ncols), groups=groups, row_weights=row_weights,
-                         off_screen=(display_type=='none'), window_size=figsize, border=False)
+                         off_screen=(display_type=='object'), window_size=figsize, border=False)
     plotter.set_background('white')
     return plotter, ncols, nrows
         
@@ -101,7 +101,7 @@ def add_context_to_view(plotter, bmesh, view_side, alpha, color, **kwargs):
     """
     if not bmesh: return
     for h, mesh in bmesh.items():
-        if (view_side == 'L' and h == 'rh') or (view_side == 'R' and h == 'lh'): continue
+        if (view_side == 'L' and h == 'L') or (view_side == 'R' and h == 'R'): continue
         plotter.add_mesh(mesh, color=color, opacity=alpha, 
                          smooth_shading=True, show_edges=False, 
                          **kwargs)
@@ -115,10 +115,19 @@ def set_camera(plotter, view_cfg, zoom=1.0, distance=200):
     plotter.camera.zoom(zoom)
 
 def finalize_plot(plotter, export_path, display_type):
-    if export_path: plotter.screenshot(export_path, transparent_background=True)
+    if export_path: 
+        plotter.screenshot(export_path, transparent_background=True)
     
-    if display_type == 'static': plotter.show(jupyter_backend='static')
-    elif display_type == 'interactive': plotter.show(jupyter_backend='trame')
-    elif display_type == 'none': plotter.close()
-    return plotter
-
+    if display_type == 'static': 
+        out = plotter.show(jupyter_backend='static')
+        plotter.close()
+    elif display_type == 'interactive': 
+        out = plotter.show(jupyter_backend='trame')
+    elif display_type == 'object': 
+        plotter.render()
+        return plotter
+    else:
+        plotter.close()
+        out = None
+    
+    return out

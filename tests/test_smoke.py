@@ -23,16 +23,16 @@ def test_plot_cortical():
     """
     Integration test: Downloads 'aparc' and plots it.
     """
-    yab.plot_cortical(atlas='aparc', display_type='none')
+    yab.plot_cortical(atlas='aparc', display_type=None)
 
 def test_plot_subcortical():
     """
     Integration test: Downloads 'aseg' and plots it.
     """
-    yab.plot_subcortical(atlas='aseg', display_type='none')
+    yab.plot_subcortical(atlas='aseg', display_type=None)
 
 def test_plot_tracts():
     """
     Integration test: Downloads 'xtract_tiny' and plots it.
     """
-    yab.plot_tracts(atlas='xtract_tiny', display_type='none')
+    yab.plot_tracts(atlas='xtract_tiny', display_type=None)

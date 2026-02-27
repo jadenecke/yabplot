@@ -40,32 +40,41 @@ please refer to the [documentation](https://teanijarv.github.io/yabplot/) for mo
 import yabplot as yab
 import numpy as np
 
-# see available cortical atlases
-atlases = yab.get_available_resources(category='cortical')
+# check that you have the latest version
+print(yab.__version__)
 
-# see the region names within the aseg atlas
-regions = yab.get_atlas_regions(atlas='aseg', category='subcortical')
+# see available atlases and brain meshes
+print(yab.get_available_resources())
 
-# plot data on cortical regions
-data = np.arange(0, 1, 0.001)
-yab.plot_cortical(data=data, atlas='schaefer_1000', figsize=(600, 300),
-                  cmap='viridis', vminmax=[0, 1], style='default',
-                  views=['left_lateral', 'superior', 'right_lateral'])
+# see the region names for a specific atlas
+print(yab.get_atlas_regions(atlas='aseg', category='subcortical'))
 
+# cortical surfaces
+atlas = 'aparc'
+dmap1 = {'L_lateraloccipital': 0.265, 'L_postcentral': 0.086, ...}
+dmap2 = {'L_fusiform': 0.218, 'L_supramarginal': 0.119, ...}
+yab.plot_cortical(data=dmap1, atlas=atlas, vminmax=[-0.1, 0.3], 
+                  bmesh_type='midthickness', views=['left_lateral', 'left_medial'],
+                  figsize=(600, 300), cmap='viridis', proc_vertices='sharp')
+yab.plot_cortical(data=dmap2, atlas=atlas, vminmax=[-0.1, 0.3], 
+                  bmesh_type='swm', views=['left_lateral', 'left_medial'],
+                  figsize=(1200, 600), cmap='viridis', proc_vertices='sharp')
 
-# plot values for specific subcortical regions
-data = {'Left_Amygdala': 0.8, 'Right_Hippocampus': 0.5, 
-        'Right_Thalamus': -0.5, 'Left_Putamen': -1}
-yab.plot_subcortical(data=data, atlas='aseg', figsize=(600, 450), layout=(2, 2),
-                     views=['superior', 'anterior', 'left_lateral', 'right_lateral'], 
-                     cmap='coolwarm', vminmax=[-1, 1], style='matte')
+# subcortical structures
+atlas = 'aseg'
+regs = yab.get_atlas_regions(atlas=atlas, category='subcortical')
+data = np.arange(1, len(regs)+1)
+yab.plot_subcortical(data=data, atlas=atlas, vminmax=[2, 14], 
+                     views=['left_lateral', 'superior', 'right_lateral'], 
+                     bmesh_alpha=0.1, figsize=(600, 300), cmap='viridis')
 
-# plot data on white matter bundles
-regions = yab.get_atlas_regions(atlas='xtract_tiny', category='tracts')
-data = np.arange(0, len(regions))
-yab.plot_tracts(data=data, atlas='xtract_tiny', figsize=(600, 300), 
-                views=['superior', 'anterior', 'left_lateral'], nan_color='#cccccc', 
-                bmesh_type='fsaverage', style='default', cmap='plasma')
+# white matter bundles
+atlas = 'xtract_tiny'
+regs = yab.get_atlas_regions(atlas=atlas, category='tracts')
+data = {reg: np.sin(i) for i, reg in enumerate(regs)}
+yab.plot_tracts(data=data, atlas=atlas, style='matte',
+                views=['left_lateral', 'anterior', 'superior'], bmesh_type='pial',
+                bmesh_alpha=0.1, figsize=(1600, 800), cmap='viridis')
 
 ```
 

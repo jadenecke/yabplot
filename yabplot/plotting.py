@@ -14,7 +14,8 @@ from .data import (
 from .utils import (
     load_gii, load_gii2pv, prep_data, 
     generate_distinct_colors, parse_lut, map_values_to_surface, 
-    lines_from_streamlines, make_cortical_mesh
+    get_puzzle_pieces, apply_internal_blur, apply_dilation,
+    get_smooth_mask, lines_from_streamlines, make_cortical_mesh
 )
 
 from .scene import (
@@ -26,8 +27,8 @@ from .scene import (
 # --- plot for cortical surface ---
 
 def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, layout=None, 
-                  figsize=(1000, 600), cmap='RdYlBu_r', vminmax=[None, None], 
-                  nan_color=(1.0, 1.0, 1.0), style='default', zoom=1.2, 
+                  bmesh_type='midthickness', figsize=(1000, 600), cmap='coolwarm', vminmax=[None, None], 
+                  nan_color=(1.0, 1.0, 1.0), style='default', zoom=1.2, proc_vertices=None,
                   display_type='static', export_path=None):
     """
     Visualize data on the cortical surface using a specified atlas.
@@ -54,6 +55,9 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
         or a dictionary of camera configurations. Defaults to all views.
     layout : tuple (rows, cols), optional
         Grid layout for subplots. If None, automatically calculated based on the number of views.
+    bmesh_type : str
+        Name of the background context brain mesh (e.g., 'midthickness', 'white', 'swm', etc). 
+        Default is 'midthickness'.
     figsize : tuple (width, height), optional
         Window size in pixels. Default is (1000, 600).
     cmap : str or matplotlib.colors.Colormap, optional
@@ -67,6 +71,11 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
         Lighting preset ('default', 'matte', 'glossy', 'sculpted', 'flat').
     zoom : float, optional
         Camera zoom level. >1.0 zooms in, <1.0 zooms out. Default is 1.2.
+    proc_vertices : str or None, optional
+        Whether to process the vertices edges according to geometry of bmesh.
+        Set to None to not perform (default).
+        'blur': Applies simple blurring between different color vertices (low performance impact).
+        'sharp': Applies sharpening of the resolution of different color vertices (high performance impact).
     display_type : {'static', 'interactive', 'none'}, optional
         'static': Returns a static image (good for notebooks).
         'interactive': Opens an interactive viewer.
@@ -80,19 +89,18 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
         The plotter instance used for rendering.
     """
 
-    # defaults
+    # atlas and categorical check
     if atlas is None and custom_atlas_path is None:
         atlas = 'aparc'
+    is_cat = (data is None)
 
     # load brain mesh
-    bmesh_path = _resolve_resource_path('conte69', 'bmesh')
-    lh_v, lh_f = load_gii(os.path.join(bmesh_path, 'conte69.lh.gii'))
-    rh_v, rh_f = load_gii(os.path.join(bmesh_path, 'conte69.rh.gii'))
+    bmesh_path = _resolve_resource_path(bmesh_type, 'bmesh')
+    lh_v, lh_f = load_gii(os.path.join(bmesh_path, f'fs_LR.32k.L.{bmesh_type}.surf.gii'))
+    rh_v, rh_f = load_gii(os.path.join(bmesh_path, f'fs_LR.32k.R.{bmesh_type}.surf.gii'))
 
-    # resolve atlas path (either download or custom directory)
+    # resolve atlas
     atlas_dir = _resolve_resource_path(atlas, 'cortical', custom_path=custom_atlas_path)
-    
-    # locate files
     check_name = None if custom_atlas_path else atlas
     csv_path, lut_path = _find_cortical_files(atlas_dir, strict_name=check_name)
 
@@ -102,28 +110,43 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
 
     # map data
     all_vals = map_values_to_surface(data, tar_labels, lut_ids, lut_names)
-    lh_vals = all_vals[:len(lh_v)]
-    rh_vals = all_vals[len(lh_v):]
+    lh_vals_raw = all_vals[:len(lh_v)]
+    rh_vals_raw = all_vals[len(lh_v):]
+
+    # vertices processing
+    results = []
+    for v, f, raw in [(lh_v, lh_f, lh_vals_raw), (rh_v, rh_f, rh_vals_raw)]:
+        if proc_vertices == 'sharp':
+            # razor-sharp puzzle mode
+            base, pieces = get_puzzle_pieces(v, f, raw)
+            results.append((base, pieces))
+        else:
+            # single clipper mode (blur or none)
+            v_proc = apply_internal_blur(f, raw, iterations=3, weight=0.3) if proc_vertices == 'blur' else raw
+            dilated = apply_dilation(f, v_proc, iterations=4)
+            o_guide = get_smooth_mask(f, np.where(np.isnan(raw), 0.0, 1.0), iterations=4)
+            
+            mesh = make_cortical_mesh(v, f, dilated)
+            mesh['Slice_Mask'] = o_guide
+            data_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=False)
+            base_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=True)
+            if base_p.n_points > 0: base_p['Data'] = np.full(base_p.n_points, np.nan)
+            results.append((base_p, [data_p]))
+    (lh_base, lh_parts), (rh_base, rh_parts) = results
 
     # setup colors
-    is_categorical = (data is None)
     n_colors = 256
-    if is_categorical:
+    if is_cat:
         _lut_colors = lut_colors.copy()
-        _lut_colors[0] = nan_color
+        _lut_colors[0] = nan_color # TODO: check nancolor
         cmap = ListedColormap(_lut_colors)
         n_colors = len(_lut_colors)
         vmin, vmax = 0, max_id
     else:
-        if cmap is None: cmap = 'RdYlBu_r'
         vmin = vminmax[0] if vminmax[0] is not None else np.nanmin(all_vals)
         vmax = vminmax[1] if vminmax[1] is not None else np.nanmax(all_vals)
 
-    # create meshes
-    lh_mesh = make_cortical_mesh(lh_v, lh_f, lh_vals)
-    rh_mesh = make_cortical_mesh(rh_v, rh_f, rh_vals)
-
-    # setup plotter
+    # plotter setup
     sel_views = get_view_configs(views)
     plotter, ncols, nrows = setup_plotter(sel_views, layout, figsize, display_type)
     shading_params = get_shading_preset(style)
@@ -132,46 +155,46 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
     for i, (name, cfg) in enumerate(sel_views.items()):
         plotter.subplot(i // ncols, i % ncols)
         
-        meshes = []
-        if cfg['side'] in ['L', 'both']: meshes.append(lh_mesh)
-        if cfg['side'] in ['R', 'both']: meshes.append(rh_mesh)
+        view_bases = []
+        view_pieces = []
+        if cfg['side'] in ['L', 'both']:
+            if lh_base.n_points > 0: view_bases.append(lh_base)
+            view_pieces.extend(lh_parts)
+        if cfg['side'] in ['R', 'both']:
+            if rh_base.n_points > 0: view_bases.append(rh_base)
+            view_pieces.extend(rh_parts)
 
-        for mesh in meshes:     
+        # brain meshes
+        for b_mesh in view_bases:     
+            plotter.add_mesh(b_mesh, color=nan_color, smooth_shading=True, **shading_params)
+
+        # data vertices
+        for p_mesh in view_pieces:
+            if p_mesh.n_points == 0: continue
+            interp = (proc_vertices == 'blur') # only blur mode uses interpolation
+            
             actor = plotter.add_mesh(
-                mesh,
-                scalars='Data', 
-                cmap=cmap, 
-                clim=(vmin, vmax), 
-                n_colors=n_colors,
-                nan_color=nan_color, 
-                show_scalar_bar=False,
-                rgb=False, 
-                smooth_shading=True,
-                show_edges=False,
-                interpolate_before_map=False,
-                **shading_params
-            )
+                p_mesh, scalars='Data', cmap=cmap, clim=(vmin, vmax), 
+                n_colors=n_colors, nan_color=nan_color, show_scalar_bar=False,
+                smooth_shading=True, interpolate_before_map=interp, **shading_params
+            ) # rgb=False, show_edges=False, interpolate_before_map=False,
             if scalar_bar_mapper is None: scalar_bar_mapper = actor.mapper
 
         set_camera(plotter, cfg, zoom=zoom)
         plotter.hide_axes()
-
-    if not is_categorical and scalar_bar_mapper:
+        
+    if not is_cat and scalar_bar_mapper:
         plotter.subplot(nrows - 1, 0)
-        plotter.add_scalar_bar(mapper=scalar_bar_mapper, title='', n_labels=2,
-                               vertical=False, position_x=0.3, position_y=0.25, 
-                               height=0.5, width=0.4,color='black', 
-                               label_font_size=20)
+        plotter.add_scalar_bar(mapper=scalar_bar_mapper, vertical=False, position_x=0.3, position_y=0.25, height=0.5, width=0.4)
     
     return finalize_plot(plotter, export_path, display_type)
-
 
 
 # --- plot for subcortical structures ---
 
 def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, layout=None, 
                      figsize=(1000, 600), cmap='coolwarm', vminmax=[None, None], nan_color='#cccccc', 
-                     nan_alpha=1.0, legend=False, style='default', bmesh_type='conte69', 
+                     nan_alpha=1.0, legend=False, style='default', bmesh_type='midthickness', 
                      bmesh_alpha=0.1, bmesh_color='lightgray', zoom=1.2, display_type='static', 
                      export_path=None, custom_atlas_proc=dict(smooth_i=15, smooth_f=0.6)):
     """
@@ -213,8 +236,8 @@ def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, 
     style : str, optional
         Lighting preset ('default', 'matte', 'glossy', 'sculpted', 'flat').
     bmesh_type : str or None, optional
-        Name of the background context brain mesh (e.g., 'conte69'). 
-        Set to None to hide the context brain.
+        Name of the background context brain mesh (e.g., 'midthickness', 'white', 'swm', etc). 
+        Set to None to hide the context brain. Default is 'midthickness'.
     bmesh_alpha : float, optional
         Opacity of the context brain mesh. Default is 0.1.
     bmesh_color : str, optional
@@ -246,8 +269,8 @@ def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, 
     bmesh = {}
     if bmesh_type:
         bmesh_path = _resolve_resource_path(bmesh_type, 'bmesh')
-        for h in ['lh', 'rh']:
-            fpath = os.path.join(bmesh_path, f'{bmesh_type}.{h}.gii')
+        for h in ['L', 'R']:
+            fpath = os.path.join(bmesh_path, f'fs_LR.32k.{h}.{bmesh_type}.surf.gii')
             if os.path.exists(fpath):
                 bmesh[h] = load_gii2pv(fpath)
     
@@ -371,7 +394,7 @@ def clear_tract_cache():
 def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layout=None, 
                 figsize=(1000, 800), cmap='coolwarm', alpha=1.0, vminmax=[None, None], 
                 nan_color='#BDBDBD', nan_alpha=1.0, legend=False, style='default',
-                bmesh_type='conte69', bmesh_alpha=0.2, bmesh_color='lightgray', 
+                bmesh_type='midthickness', bmesh_alpha=0.2, bmesh_color='lightgray', 
                 zoom=1.2, orientation_coloring=False, display_type='static', 
                 tract_kwargs=dict(render_lines_as_tubes=True, line_width=1.2),
                 export_path=None):
@@ -417,8 +440,8 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
     style : str, optional
         Lighting preset ('default', 'matte', 'glossy', 'sculpted', 'flat').
     bmesh_type : str or None, optional
-        Name of the background context brain mesh (e.g., 'conte69'). 
-        Set to None to hide the context brain.
+        Name of the background context brain mesh (e.g., 'midthickness', 'white', 'swm', etc). 
+        Set to None to hide the context brain. Default is 'midthickness'.
     bmesh_alpha : float, optional
         Opacity of the context brain mesh. Default is 0.2.
     bmesh_color : str, optional
@@ -472,8 +495,8 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
     bmesh = {}
     if bmesh_type:
         bmesh_path = _resolve_resource_path(bmesh_type, 'bmesh')
-        for h in ['lh', 'rh']:
-            fpath = os.path.join(bmesh_path, f'{bmesh_type}.{h}.gii')
+        for h in ['L', 'R']:
+            fpath = os.path.join(bmesh_path, f'fs_LR.32k.{h}.{bmesh_type}.surf.gii')
             if os.path.exists(fpath):
                 bmesh[h] = load_gii2pv(fpath)
 
