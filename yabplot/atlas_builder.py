@@ -7,7 +7,7 @@ import pyvista as pv
 from skimage import measure
 from .wrappers import run_wb_import, run_wb_projection
 from .data import get_surface_paths
-from .plotting import plot_cortical
+from .plotting import plot_cortical, plot_subcortical
 
 ### CORTICAL
 
@@ -74,7 +74,7 @@ def build_cortical_atlas(nii_path, wb_txt_path, out_dir, include_list=None, excl
     # extract LUT and apply include/exclude filtering
     labels_dict = nib.load(lh_gii).labeltable.get_labels_as_dict()
     valid_ids = []
-    lut_dict = {} # <-- we create the dictionary here!
+    lut_dict = {} 
     
     for rid, name in labels_dict.items():
         if rid == 0 or name == '???': continue 
@@ -345,7 +345,6 @@ def qc_custom_subcortical_atlas(atlas_dir):
     atlas_dir : str
         absolute path to the custom atlas directory containing the .vtk files.
     """
-    import yabplot as yab 
     
     qc_dir = os.path.join(atlas_dir, "qc_report")
     os.makedirs(qc_dir, exist_ok=True)
@@ -392,7 +391,7 @@ def qc_custom_subcortical_atlas(atlas_dir):
             plot_file = os.path.join(qc_dir, f"{region_name}.png")
             
             try:
-                yab.plot_subcortical(
+                plot_subcortical(
                     data={region_name: 1},
                     custom_atlas_path=atlas_dir,
                     cmap='binary', vminmax=[0, 1],
