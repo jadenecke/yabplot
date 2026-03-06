@@ -70,6 +70,52 @@ def get_available_resources(category=None):
         
     return all_resources
 
+def get_surface_paths(name, category):
+    """
+    Fetches and returns the paths to the Left and Right hemisphere files 
+    for a given surface resource (meshes or labels).
+    
+    Parameters
+    ----------
+    name : str
+        Name of the resource (e.g., 'midthickness', 'nomedialwall').
+    category : str
+        Must be 'bmesh' or 'label'.
+        
+    Returns
+    -------
+    tuple
+        (lh_path, rh_path) containing absolute paths to the files.
+    """
+    if category not in ['bmesh', 'label']:
+        raise ValueError("Category must be 'bmesh' or 'label' to fetch surface paths.")
+        
+    # Download/unpack the zip and get the folder path
+    directory = _resolve_resource_path(name, category)
+    
+    lh_path = None
+    rh_path = None
+    
+    # Traverse the unzipped directory to find L and R files
+    for root, dirs, files in os.walk(directory):
+        # Ignore hidden folders like .git or __MACOSX
+        dirs[:] = [d for d in dirs if not d.startswith(('.', '__'))]
+        for file in files:
+            # Ignore hidden files
+            if file.startswith('.'): 
+                continue
+            
+            # Robust checking for Left and Right hemisphere indicators
+            if '.L.' in file or '_L_' in file or 'hemi-L' in file:
+                lh_path = os.path.join(root, file)
+            elif '.R.' in file or '_R_' in file or 'hemi-R' in file:
+                rh_path = os.path.join(root, file)
+                
+    if not lh_path or not rh_path:
+        raise FileNotFoundError(f"Could not locate both Left and Right hemisphere files for '{name}' in {directory}")
+        
+    return lh_path, rh_path
+
 def get_atlas_regions(atlas, category, custom_atlas_path=None):
     """
     Returns the list of region names for a given atlas in the specific order 
@@ -191,7 +237,8 @@ def _resolve_resource_path(name, category, custom_path=None):
             'cortical': 'Cortical parcellations (vertices)',
             'subcortical': 'Subcortical segmentations (volumes)', 
             'tracts': 'White matter bundles (tracts)',
-            'bmesh': 'Brain meshes'
+            'bmesh': 'Brain meshes',
+            'label': 'Surface labels'
         }.get(category, category)
         
         raise ValueError(

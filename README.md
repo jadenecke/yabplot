@@ -32,6 +32,9 @@ pip install yabplot --upgrade # to update
 
 dependencies: python 3.11 with ipywidgets, nibabel, pandas, pooch, pyvista, scikit-image, trame, trame-vtk, trame-vuetify
 
+(Connectome Workbench (`wb_command`) is a requirement to create custom cortical atlases unless you plan to only use pre-loaded atlases; see more in docs)
+
+
 ## quick start
 
 please refer to the [documentation](https://teanijarv.github.io/yabplot/) for more comprehensive guides.

@@ -5,11 +5,14 @@ cortical-schaefer_200.zip sha256:065ee05afa1881a8884bdecee25a062ddd5fd6283bfeaab
 cortical-schaefer_300.zip sha256:5430c66eaef58f008b9e20dd5c59c670c7f7154b02f4b310dda97250331b6eed https://osf.io/9djtr/download
 cortical-schaefer_400.zip sha256:ae2b7011919d49e9930ee5aed1b19731180427f07f0d1c4497130dd9cd5e878d https://osf.io/pzmc5/download
 cortical-schaefer_1000.zip sha256:a10448f101a874499d41bc62508c3af29120634955f48beb282ece9a4cc2bb0e https://osf.io/j9ygz/download
+cortical-aal3.zip sha256:925e475e099b127925e20e6ec4d179b1a58971f2bc32b2a61f56a479f3e8d4fb https://osf.io/z9jxh/download
 subcortical-aseg.zip sha256:a901a7fc6a39f9bdaf2ef2bafbcde1fbc085b225d99e6730c727650d9be047d5 https://osf.io/5cs7y/download
 subcortical-brainnetome_sc.zip sha256:8301fdf6af109af52a2cf9b06d15486345d457b69cb86169ed38332a34a681c0 https://osf.io/2fsg5/download
 subcortical-jhu.zip sha256:b0ca292589a9f041851dba8159bb605a4657323e4305ba1570a304944b28d0de https://osf.io/x5fhg/download
 subcortical-musus100_dbn.zip sha256:1d865832a35570a8c67f79d5049b58c548d25cf4fe1853164c384193b6712e40 https://osf.io/eutmb/download
 subcortical-tian2020_sc.zip sha256:8b5caf8bf0cdcf8e259a3532fbcb232f8746d68fc734ca9806d10e70cf8707a3 https://osf.io/jrvgp/download
+subcortical-aal3.zip sha256:48abe400656d913cc459ee8766e373cc5eabbeb9e4f770aa7396da3d4a0ab3ca https://osf.io/39ebh/download
+subcortical-aal3_nocer.zip sha256:b87de55861cdd18ddb78934964b0e0855f770560bdc878570fcbb8f27fefb674 https://osf.io/7jdxz/download
 tracts-hcp1065_medium.zip sha256:366bb100074cf7b1e55586e5468653f0c342e42cfdd91dca6d99b6fde82f06ff https://osf.io/kjf8e/download
 tracts-hcp1065_small.zip sha256:020f23059c3a20ee0dda8ad12cd3df99b9fe5d3b37e7a6b9ae34b8a52b4b4346 https://osf.io/ynpa5/download
 tracts-hcp1065_tiny.zip sha256:54380d82f5cd234029c6fc011910e00f0ad859fdb6c22c6aaa6452d055449ae9 https://osf.io/jzk7p/download
@@ -23,3 +26,4 @@ bmesh-pial.zip sha256:5e36ba7883dd2a88485fc45c9166ed48e22db607d45655242961242b51
 bmesh-swm.zip sha256:1a516c070cb63557751d841d5cf75772660872b89ec749ee19c23298d77fa807 https://osf.io/hpbc9/download
 bmesh-very_inflated.zip sha256:8c33a00c718a47f0af118ce2c5804a2adf13d79be05c4665ca26582e3e8dd977 https://osf.io/xp9jr/download
 bmesh-white.zip sha256:b885ac1a4dcdf9e241a97e8d3ca59d7b1c86d8a3ebe17df512993bc5c1c0354a https://osf.io/wfc5t/download
+label-nomedialwall.zip sha256:03bd589b151814a1fc5e48236a78decf1a51791f04c3f4a521d2ed4fb214317b https://osf.io/2rgmc/download

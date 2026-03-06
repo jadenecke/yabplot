@@ -61,8 +61,9 @@ nav:
       - getting started: tutorials/getting_started.ipynb
       - data mapping: tutorials/data_mapping.ipynb
       - plot styling: tutorials/plot_styling.ipynb
-      - plotting custom subcortical atlas: tutorials/custom_subcortical_atlas.ipynb
-      - plotting custom cortical atlas: tutorials/custom_cortical_atlas.ipynb
+      - (advanced) using custom subcortical atlas: tutorials/custom_subcortical_atlas.ipynb
+      - (advanced) using custom cortical atlas: tutorials/custom_cortical_atlas.ipynb
   - API reference:
       - plotting functions: reference/plotting.md
       - helper utilities: reference/utils.md
+      - custom atlas building: reference/atlas_builder.md
