@@ -1,6 +1,6 @@
 # yabplot: yet another brain plot
 
-![logo](docs/assets/yabplot_logo.png)
+![logo](assets/yabplot_logo.png)
 
 [![PyPI version](https://img.shields.io/pypi/v/yabplot.svg)](https://pypi.org/project/yabplot/)
 [![Docs](https://github.com/teanijarv/yabplot/actions/workflows/docs.yml/badge.svg)](https://teanijarv.github.io/yabplot/)
@@ -31,6 +31,8 @@ pip install yabplot --upgrade # to update
 ```
 
 dependencies: python 3.11 with ipywidgets, nibabel, pandas, pooch, pyvista, scikit-image, trame, trame-vtk, trame-vuetify
+
+(Connectome Workbench (`wb_command`) is a requirement to create custom cortical atlases unless you plan to only use pre-loaded atlases; see more in docs)
 
 ## quick start
 
@@ -78,7 +80,7 @@ yab.plot_tracts(data=data, atlas=atlas, style='matte',
 
 ```
 
-![examples](docs/assets/examples.png)
+![examples](assets/examples.png)
 
 ## acknowledgements
 
