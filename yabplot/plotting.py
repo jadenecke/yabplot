@@ -190,6 +190,142 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
     return finalize_plot(plotter, export_path, display_type)
 
 
+# --- plot for arbitrary per-vertex data ---
+
+def plot_vertexwise(lh, rh, views=None, layout=None, figsize=(1000, 600),
+                    cmap='coolwarm', vminmax=[None, None],
+                    nan_color=(1.0, 1.0, 1.0), style='default', zoom=1.2,
+                    proc_vertices=None, display_type='static', export_path=None):
+    """
+    Visualize arbitrary per-vertex scalar data on a user-supplied brain mesh.
+
+    Unlike `plot_cortical`, this function requires no atlas. The user provides
+    PyVista PolyData meshes (e.g. from `make_cortical_mesh`) with per-vertex
+    scalar data stored under the key ``'Data'``.
+
+    Parameters
+    ----------
+    lh : pyvista.PolyData
+        Left hemisphere mesh with ``mesh['Data']`` as a (N,) float array.
+    rh : pyvista.PolyData
+        Right hemisphere mesh with ``mesh['Data']`` as a (N,) float array.
+    views : list of str, optional
+        Can be a list of presets ('left_lateral', 'right_medial', etc.)
+        or a dictionary of camera configurations. Defaults to all views.
+    layout : tuple (rows, cols), optional
+        Grid layout for subplots. If None, auto-calculated.
+    figsize : tuple (width, height), optional
+        Window size in pixels. Default is (1000, 600).
+    cmap : str or matplotlib.colors.Colormap, optional
+        Colormap. Default is 'coolwarm'.
+    vminmax : list [min, max], optional
+        Colormap bounds. If [None, None], inferred from data range.
+    nan_color : tuple or str, optional
+        Color for NaN vertices. Default is white.
+    style : str, optional
+        Lighting preset ('default', 'matte', 'glossy', 'sculpted', 'flat').
+    zoom : float, optional
+        Camera zoom level. Default is 1.2.
+    proc_vertices : str or None, optional
+        Vertex processing mode: None, 'blur', or 'sharp'.
+    display_type : {'static', 'interactive', 'none'}, optional
+        Rendering mode.
+    export_path : str, optional
+        If provided, saves the figure to this path.
+
+    Returns
+    -------
+    pyvista.Plotter
+        The plotter instance used for rendering.
+
+    See Also
+    --------
+    yabplot.utils.load_vertexwise_mesh
+
+    Examples
+    --------
+    >>> from yabplot.utils import load_vertexwise_mesh
+    >>> lh, rh = load_vertexwise_mesh(
+    ...     fsaverage.pial_left, fsaverage.pial_right,
+    ...     d_values_lh, d_values_rh
+    ... )
+    >>> plot_vertexwise(lh, rh, views=['left_lateral', 'right_lateral'])
+    """
+    # extract v, f, raw from PyVista meshes
+    lh_v = lh.points
+    lh_f = lh.faces.reshape(-1, 4)[:, 1:]
+    lh_vals_raw = lh['Data']
+
+    rh_v = rh.points
+    rh_f = rh.faces.reshape(-1, 4)[:, 1:]
+    rh_vals_raw = rh['Data']
+
+    # compute vmin/vmax across both hemispheres
+    all_vals = np.concatenate([lh_vals_raw, rh_vals_raw])
+    vmin = vminmax[0] if vminmax[0] is not None else np.nanmin(all_vals)
+    vmax = vminmax[1] if vminmax[1] is not None else np.nanmax(all_vals)
+
+    # vertices processing
+    results = []
+    for v, f, raw in [(lh_v, lh_f, lh_vals_raw), (rh_v, rh_f, rh_vals_raw)]:
+        if proc_vertices == 'sharp':
+            base, pieces = get_puzzle_pieces(v, f, raw)
+            results.append((base, pieces))
+        else:
+            v_proc = apply_internal_blur(f, raw, iterations=3, weight=0.3) if proc_vertices == 'blur' else raw
+            dilated = apply_dilation(f, v_proc, iterations=4)
+            o_guide = get_smooth_mask(f, np.where(np.isnan(raw), 0.0, 1.0), iterations=4)
+
+            mesh = make_cortical_mesh(v, f, dilated)
+            mesh['Slice_Mask'] = o_guide
+            data_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=False)
+            base_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=True)
+            if base_p.n_points > 0: base_p['Data'] = np.full(base_p.n_points, np.nan)
+            results.append((base_p, [data_p]))
+    (lh_base, lh_parts), (rh_base, rh_parts) = results
+
+    # plotter setup
+    sel_views = get_view_configs(views)
+    plotter, ncols, nrows = setup_plotter(sel_views, layout, figsize, display_type)
+    shading_params = get_shading_preset(style)
+    scalar_bar_mapper = None
+
+    for i, (name, cfg) in enumerate(sel_views.items()):
+        plotter.subplot(i // ncols, i % ncols)
+
+        view_bases = []
+        view_pieces = []
+        if cfg['side'] in ['L', 'both']:
+            if lh_base.n_points > 0: view_bases.append(lh_base)
+            view_pieces.extend(lh_parts)
+        if cfg['side'] in ['R', 'both']:
+            if rh_base.n_points > 0: view_bases.append(rh_base)
+            view_pieces.extend(rh_parts)
+
+        for b_mesh in view_bases:
+            plotter.add_mesh(b_mesh, color=nan_color, smooth_shading=True, **shading_params)
+
+        for p_mesh in view_pieces:
+            if p_mesh.n_points == 0: continue
+            interp = (proc_vertices == 'blur')
+
+            actor = plotter.add_mesh(
+                p_mesh, scalars='Data', cmap=cmap, clim=(vmin, vmax),
+                n_colors=256, nan_color=nan_color, show_scalar_bar=False,
+                smooth_shading=True, interpolate_before_map=interp, **shading_params
+            )
+            if scalar_bar_mapper is None: scalar_bar_mapper = actor.mapper
+
+        set_camera(plotter, cfg, zoom=zoom)
+        plotter.hide_axes()
+
+    if scalar_bar_mapper:
+        plotter.subplot(nrows - 1, 0)
+        plotter.add_scalar_bar(mapper=scalar_bar_mapper, vertical=False, position_x=0.3, position_y=0.25, height=0.5, width=0.4)
+
+    return finalize_plot(plotter, export_path, display_type)
+
+
 # --- plot for subcortical structures ---
 
 def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, layout=None, 
