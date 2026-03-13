@@ -192,23 +192,26 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
 
 # --- plot for arbitrary per-vertex data ---
 
-def plot_vertexwise(lh, rh, views=None, layout=None, figsize=(1000, 600),
+def plot_vertexwise(lh, rh, scalars='Data', views=None, layout=None, figsize=(1000, 600),
                     cmap='coolwarm', vminmax=[None, None],
                     nan_color=(1.0, 1.0, 1.0), style='default', zoom=1.2,
                     proc_vertices=None, display_type='static', export_path=None):
     """
     Visualize arbitrary per-vertex scalar data on a user-supplied brain mesh.
 
-    Unlike `plot_cortical`, this function requires no atlas. The user provides
-    PyVista PolyData meshes (e.g. from `make_cortical_mesh`) with per-vertex
-    scalar data stored under the key ``'Data'``.
+    Unlike `plot_cortical`, this function requires no atlas. The user provides 
+    PyVista PolyData meshes (e.g., from `make_cortical_mesh`) with per-vertex 
+    scalar data stored under the key specified by `scalars`.
 
     Parameters
     ----------
     lh : pyvista.PolyData
-        Left hemisphere mesh with ``mesh['Data']`` as a (N,) float array.
+        Left hemisphere mesh containing a (N,) float array under ``lh[scalars]``.
     rh : pyvista.PolyData
-        Right hemisphere mesh with ``mesh['Data']`` as a (N,) float array.
+        Right hemisphere mesh containing a (N,) float array under ``rh[scalars]``.
+    scalars : str, optional
+        The string key corresponding to the scalar data array in the PyVista 
+        point data dictionary. Default is 'Data'.
     views : list of str, optional
         Can be a list of presets ('left_lateral', 'right_medial', etc.)
         or a dictionary of camera configurations. Defaults to all views.
@@ -249,16 +252,23 @@ def plot_vertexwise(lh, rh, views=None, layout=None, figsize=(1000, 600),
     ...     fsaverage.pial_left, fsaverage.pial_right,
     ...     d_values_lh, d_values_rh
     ... )
+    >>> # If your data was injected under the default 'Data' key
     >>> plot_vertexwise(lh, rh, views=['left_lateral', 'right_lateral'])
+    >>> 
+    >>> # If your data was injected under a custom key
+    >>> lh['thickness'] = lh_thick_array
+    >>> rh['thickness'] = rh_thick_array
+    >>> plot_vertexwise(lh, rh, scalars='thickness', cmap='inferno')
     """
+
     # extract v, f, raw from PyVista meshes
     lh_v = lh.points
     lh_f = lh.faces.reshape(-1, 4)[:, 1:]
-    lh_vals_raw = lh['Data']
+    lh_vals_raw = lh[scalars]
 
     rh_v = rh.points
     rh_f = rh.faces.reshape(-1, 4)[:, 1:]
-    rh_vals_raw = rh['Data']
+    rh_vals_raw = rh[scalars]
 
     # compute vmin/vmax across both hemispheres
     all_vals = np.concatenate([lh_vals_raw, rh_vals_raw])
