@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 import yabplot as yab
 import pyvista as pv
 
@@ -36,3 +37,13 @@ def test_plot_tracts():
     Integration test: Downloads 'xtract_tiny' and plots it.
     """
     yab.plot_tracts(atlas='xtract_tiny', display_type=None)
+
+def test_plot_vertexwise():
+    """
+    Integration test: plot_vertexwise with synthetic sphere meshes.
+    """
+    lh = pv.Sphere()
+    rh = pv.Sphere()
+    lh['Data'] = np.random.rand(lh.n_points)
+    rh['Data'] = np.random.rand(rh.n_points)
+    yab.plot_vertexwise(lh, rh, display_type=None)

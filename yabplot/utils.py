@@ -40,6 +40,12 @@ def load_gii2pv(gii_path, smooth_i=0, smooth_f=0.1):
     
     return mesh
 
+def load_vertexwise_mesh(mesh_lh, mesh_rh, data_lh, data_rh):
+    """Helper to load arbitrary user-supplied mesh (e.g., fsaverage5)."""
+    lh = make_cortical_mesh(*load_gii(mesh_lh), data_lh)
+    rh = make_cortical_mesh(*load_gii(mesh_rh), data_rh)
+    return lh, rh
+
 def make_cortical_mesh(verts, faces, scalars):
     """Helper to create a PyVista mesh from raw buffers."""
     faces_pv = np.hstack([np.full((faces.shape[0], 1), 3), faces]).flatten().astype(int)
