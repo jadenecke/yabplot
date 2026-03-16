@@ -61,6 +61,7 @@ nav:
       - getting started: tutorials/getting_started.ipynb
       - data mapping: tutorials/data_mapping.ipynb
       - plot styling: tutorials/plot_styling.ipynb
+      - plotting vertex-wise: tutorials/plotting_vertexwise.ipynb
       - (advanced) using custom subcortical atlas: tutorials/custom_subcortical_atlas.ipynb
       - (advanced) using custom cortical atlas: tutorials/custom_cortical_atlas.ipynb
   - API reference:

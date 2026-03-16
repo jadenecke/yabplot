@@ -114,6 +114,41 @@ def set_camera(plotter, view_cfg, zoom=1.0, distance=200):
     plotter.reset_camera()
     plotter.camera.zoom(zoom)
 
+def add_colorbars(plotter, mappers, titles, nrows, figsize):
+    """
+    Adds unified, cleanly formatted colorbars to the bottom row of the plot.
+    """
+    plotter.subplot(nrows - 1, 0) 
+    
+    valid_mappers = [m for m in mappers if m is not None]
+    valid_titles = [t for m, t in zip(mappers, titles) if m is not None]
+    num_bars = len(valid_mappers)
+    
+    if num_bars == 0: 
+        return
+
+    # calculate dynamic sizing based on window aspect ratio
+    width_px, height_px = figsize
+    aspect_ratio = width_px / height_px
+    cb_width = 0.35 if aspect_ratio > 1.5 else 0.60
+    pos_x = (1.0 - cb_width) / 2.0  
+    cb_height = 0.2 
+    
+    if num_bars == 1: 
+        positions_y = [0.15] 
+    elif num_bars == 2: 
+        positions_y = [0.5, 0.01]
+    else: 
+        positions_y = np.linspace(0.35, 0.05, num_bars)
+    
+    for i, (mapper, title) in enumerate(zip(valid_mappers, valid_titles)):
+        plotter.add_scalar_bar(
+            mapper=mapper, title=title, vertical=False, 
+            position_x=pos_x, position_y=positions_y[i], 
+            height=cb_height, width=cb_width, color='black', 
+            title_font_size=13, label_font_size=11, n_labels=5, fmt="%.2f"
+        )
+
 def finalize_plot(plotter, export_path, display_type):
     if export_path: 
         plotter.screenshot(export_path, transparent_background=True)

@@ -7,7 +7,7 @@ import pyvista as pv
 from matplotlib.colors import ListedColormap
 
 from .data import (
-    _resolve_resource_path, _find_cortical_files, 
+    get_surface_paths, _resolve_resource_path, _find_cortical_files, 
     _find_subcortical_files, _find_tract_files
 )
 
@@ -20,11 +20,94 @@ from .utils import (
 
 from .scene import (
     get_view_configs, setup_plotter, add_context_to_view, 
-    set_camera, finalize_plot, get_shading_preset
+    set_camera, finalize_plot, get_shading_preset, add_colorbars
 )
 
 
-# --- plot for cortical surface ---
+
+def _render_cortical_views(lh_v, lh_f, lh_vals, rh_v, rh_f, rh_vals, is_cat,
+                           views, layout, figsize, cmap, vminmax, nan_color, 
+                           style, zoom, proc_vertices, display_type, export_path,
+                           lut_colors=None, max_id=None):
+    """Internal helper to render cortical data."""
+
+    # setup colors and vminmax
+    n_colors = 256
+    if is_cat:
+        _lut_colors = lut_colors.copy()
+        _lut_colors[0] = nan_color 
+        cmap = ListedColormap(_lut_colors)
+        n_colors = len(_lut_colors)
+        vmin, vmax = 0, max_id
+    else:
+        all_vals = np.concatenate([lh_vals, rh_vals])
+        vmin = vminmax[0] if vminmax[0] is not None else np.nanmin(all_vals)
+        vmax = vminmax[1] if vminmax[1] is not None else np.nanmax(all_vals)
+
+    # process vertices
+    results = []
+    for v, f, raw in [(lh_v, lh_f, lh_vals), (rh_v, rh_f, rh_vals)]:
+        if proc_vertices == 'sharp':
+            base, pieces = get_puzzle_pieces(v, f, raw)
+            results.append((base, pieces))
+        else:
+            v_proc = apply_internal_blur(f, raw, iterations=3, weight=0.3) if proc_vertices == 'blur' else raw
+            dilated = apply_dilation(f, v_proc, iterations=4)
+            o_guide = get_smooth_mask(f, np.where(np.isnan(raw), 0.0, 1.0), iterations=4)
+            
+            mesh = make_cortical_mesh(v, f, dilated)
+            mesh['Slice_Mask'] = o_guide
+            data_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=False)
+            base_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=True)
+            if base_p.n_points > 0: base_p['Data'] = np.full(base_p.n_points, np.nan)
+            results.append((base_p, [data_p]))
+    (lh_base, lh_parts), (rh_base, rh_parts) = results
+
+    # plotter setup
+    sel_views = get_view_configs(views)
+    plotter, ncols, nrows = setup_plotter(sel_views, layout, figsize, display_type)
+    shading_params = get_shading_preset(style)
+    scalar_bar_mapper = None
+
+    for i, (name, cfg) in enumerate(sel_views.items()):
+        plotter.subplot(i // ncols, i % ncols)
+        
+        view_bases = []
+        view_pieces = []
+        if cfg['side'] in ['L', 'both']:
+            if lh_base.n_points > 0: view_bases.append(lh_base)
+            view_pieces.extend(lh_parts)
+        if cfg['side'] in ['R', 'both']:
+            if rh_base.n_points > 0: view_bases.append(rh_base)
+            view_pieces.extend(rh_parts)
+
+        # brain meshes
+        for b_mesh in view_bases:     
+            plotter.add_mesh(b_mesh, color=nan_color, smooth_shading=True, **shading_params)
+
+        # data vertices
+        for p_mesh in view_pieces:
+            if p_mesh.n_points == 0: continue
+            interp = (proc_vertices == 'blur') 
+            
+            actor = plotter.add_mesh(
+                p_mesh, scalars='Data', cmap=cmap, clim=(vmin, vmax), 
+                n_colors=n_colors, nan_color=nan_color, show_scalar_bar=False,
+                smooth_shading=True, interpolate_before_map=interp, **shading_params
+            )
+            if scalar_bar_mapper is None: scalar_bar_mapper = actor.mapper
+
+        set_camera(plotter, cfg, zoom=zoom)
+        plotter.hide_axes()
+        
+    if not is_cat and scalar_bar_mapper:
+        add_colorbars(plotter, [scalar_bar_mapper], [''], nrows, figsize) 
+    
+    return finalize_plot(plotter, export_path, display_type)
+
+
+
+### PLOT FOR ATLAS-BASED CORTICAL DATA ###
 
 def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, layout=None, 
                   bmesh_type='midthickness', figsize=(1000, 600), cmap='coolwarm', vminmax=[None, None], 
@@ -95,9 +178,9 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
     is_cat = (data is None)
 
     # load brain mesh
-    bmesh_path = _resolve_resource_path(bmesh_type, 'bmesh')
-    lh_v, lh_f = load_gii(os.path.join(bmesh_path, f'fs_LR.32k.L.{bmesh_type}.surf.gii'))
-    rh_v, rh_f = load_gii(os.path.join(bmesh_path, f'fs_LR.32k.R.{bmesh_type}.surf.gii'))
+    b_lh_path, b_rh_path = get_surface_paths(bmesh_type, 'bmesh')
+    lh_v, lh_f = load_gii(b_lh_path)
+    rh_v, rh_f = load_gii(b_rh_path)
 
     # resolve atlas
     atlas_dir = _resolve_resource_path(atlas, 'cortical', custom_path=custom_atlas_path)
@@ -113,84 +196,16 @@ def plot_cortical(data=None, atlas=None, custom_atlas_path=None, views=None, lay
     lh_vals_raw = all_vals[:len(lh_v)]
     rh_vals_raw = all_vals[len(lh_v):]
 
-    # vertices processing
-    results = []
-    for v, f, raw in [(lh_v, lh_f, lh_vals_raw), (rh_v, rh_f, rh_vals_raw)]:
-        if proc_vertices == 'sharp':
-            # razor-sharp puzzle mode
-            base, pieces = get_puzzle_pieces(v, f, raw)
-            results.append((base, pieces))
-        else:
-            # single clipper mode (blur or none)
-            v_proc = apply_internal_blur(f, raw, iterations=3, weight=0.3) if proc_vertices == 'blur' else raw
-            dilated = apply_dilation(f, v_proc, iterations=4)
-            o_guide = get_smooth_mask(f, np.where(np.isnan(raw), 0.0, 1.0), iterations=4)
-            
-            mesh = make_cortical_mesh(v, f, dilated)
-            mesh['Slice_Mask'] = o_guide
-            data_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=False)
-            base_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=True)
-            if base_p.n_points > 0: base_p['Data'] = np.full(base_p.n_points, np.nan)
-            results.append((base_p, [data_p]))
-    (lh_base, lh_parts), (rh_base, rh_parts) = results
-
-    # setup colors
-    n_colors = 256
-    if is_cat:
-        _lut_colors = lut_colors.copy()
-        _lut_colors[0] = nan_color # TODO: check nancolor
-        cmap = ListedColormap(_lut_colors)
-        n_colors = len(_lut_colors)
-        vmin, vmax = 0, max_id
-    else:
-        vmin = vminmax[0] if vminmax[0] is not None else np.nanmin(all_vals)
-        vmax = vminmax[1] if vminmax[1] is not None else np.nanmax(all_vals)
-
-    # plotter setup
-    sel_views = get_view_configs(views)
-    plotter, ncols, nrows = setup_plotter(sel_views, layout, figsize, display_type)
-    shading_params = get_shading_preset(style)
-    scalar_bar_mapper = None
-
-    for i, (name, cfg) in enumerate(sel_views.items()):
-        plotter.subplot(i // ncols, i % ncols)
-        
-        view_bases = []
-        view_pieces = []
-        if cfg['side'] in ['L', 'both']:
-            if lh_base.n_points > 0: view_bases.append(lh_base)
-            view_pieces.extend(lh_parts)
-        if cfg['side'] in ['R', 'both']:
-            if rh_base.n_points > 0: view_bases.append(rh_base)
-            view_pieces.extend(rh_parts)
-
-        # brain meshes
-        for b_mesh in view_bases:     
-            plotter.add_mesh(b_mesh, color=nan_color, smooth_shading=True, **shading_params)
-
-        # data vertices
-        for p_mesh in view_pieces:
-            if p_mesh.n_points == 0: continue
-            interp = (proc_vertices == 'blur') # only blur mode uses interpolation
-            
-            actor = plotter.add_mesh(
-                p_mesh, scalars='Data', cmap=cmap, clim=(vmin, vmax), 
-                n_colors=n_colors, nan_color=nan_color, show_scalar_bar=False,
-                smooth_shading=True, interpolate_before_map=interp, **shading_params
-            ) # rgb=False, show_edges=False, interpolate_before_map=False,
-            if scalar_bar_mapper is None: scalar_bar_mapper = actor.mapper
-
-        set_camera(plotter, cfg, zoom=zoom)
-        plotter.hide_axes()
-        
-    if not is_cat and scalar_bar_mapper:
-        plotter.subplot(nrows - 1, 0)
-        plotter.add_scalar_bar(mapper=scalar_bar_mapper, vertical=False, position_x=0.3, position_y=0.25, height=0.5, width=0.4)
-    
-    return finalize_plot(plotter, export_path, display_type)
+    # render
+    return _render_cortical_views(
+        lh_v, lh_f, lh_vals_raw, rh_v, rh_f, rh_vals_raw, is_cat,
+        views, layout, figsize, cmap, vminmax, nan_color, style, 
+        zoom, proc_vertices, display_type, export_path, lut_colors, max_id
+    )
 
 
-# --- plot for arbitrary per-vertex data ---
+
+### PLOT FOR VERTEX-WISE CORTICAL DATA ###
 
 def plot_vertexwise(lh, rh, scalars='Data', views=None, layout=None, figsize=(1000, 600),
                     cmap='coolwarm', vminmax=[None, None],
@@ -265,82 +280,24 @@ def plot_vertexwise(lh, rh, scalars='Data', views=None, layout=None, figsize=(10
     lh_v = lh.points
     lh_f = lh.faces.reshape(-1, 4)[:, 1:]
     lh_vals_raw = lh[scalars]
-
     rh_v = rh.points
     rh_f = rh.faces.reshape(-1, 4)[:, 1:]
     rh_vals_raw = rh[scalars]
 
-    # compute vmin/vmax across both hemispheres
-    all_vals = np.concatenate([lh_vals_raw, rh_vals_raw])
-    vmin = vminmax[0] if vminmax[0] is not None else np.nanmin(all_vals)
-    vmax = vminmax[1] if vminmax[1] is not None else np.nanmax(all_vals)
-
-    # vertices processing
-    results = []
-    for v, f, raw in [(lh_v, lh_f, lh_vals_raw), (rh_v, rh_f, rh_vals_raw)]:
-        if proc_vertices == 'sharp':
-            base, pieces = get_puzzle_pieces(v, f, raw)
-            results.append((base, pieces))
-        else:
-            v_proc = apply_internal_blur(f, raw, iterations=3, weight=0.3) if proc_vertices == 'blur' else raw
-            dilated = apply_dilation(f, v_proc, iterations=4)
-            o_guide = get_smooth_mask(f, np.where(np.isnan(raw), 0.0, 1.0), iterations=4)
-
-            mesh = make_cortical_mesh(v, f, dilated)
-            mesh['Slice_Mask'] = o_guide
-            data_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=False)
-            base_p = mesh.clip_scalar(scalars='Slice_Mask', value=0.5, invert=True)
-            if base_p.n_points > 0: base_p['Data'] = np.full(base_p.n_points, np.nan)
-            results.append((base_p, [data_p]))
-    (lh_base, lh_parts), (rh_base, rh_parts) = results
-
-    # plotter setup
-    sel_views = get_view_configs(views)
-    plotter, ncols, nrows = setup_plotter(sel_views, layout, figsize, display_type)
-    shading_params = get_shading_preset(style)
-    scalar_bar_mapper = None
-
-    for i, (name, cfg) in enumerate(sel_views.items()):
-        plotter.subplot(i // ncols, i % ncols)
-
-        view_bases = []
-        view_pieces = []
-        if cfg['side'] in ['L', 'both']:
-            if lh_base.n_points > 0: view_bases.append(lh_base)
-            view_pieces.extend(lh_parts)
-        if cfg['side'] in ['R', 'both']:
-            if rh_base.n_points > 0: view_bases.append(rh_base)
-            view_pieces.extend(rh_parts)
-
-        for b_mesh in view_bases:
-            plotter.add_mesh(b_mesh, color=nan_color, smooth_shading=True, **shading_params)
-
-        for p_mesh in view_pieces:
-            if p_mesh.n_points == 0: continue
-            interp = (proc_vertices == 'blur')
-
-            actor = plotter.add_mesh(
-                p_mesh, scalars='Data', cmap=cmap, clim=(vmin, vmax),
-                n_colors=256, nan_color=nan_color, show_scalar_bar=False,
-                smooth_shading=True, interpolate_before_map=interp, **shading_params
-            )
-            if scalar_bar_mapper is None: scalar_bar_mapper = actor.mapper
-
-        set_camera(plotter, cfg, zoom=zoom)
-        plotter.hide_axes()
-
-    if scalar_bar_mapper:
-        plotter.subplot(nrows - 1, 0)
-        plotter.add_scalar_bar(mapper=scalar_bar_mapper, vertical=False, position_x=0.3, position_y=0.25, height=0.5, width=0.4)
-
-    return finalize_plot(plotter, export_path, display_type)
+    # render
+    return _render_cortical_views(
+        lh_v, lh_f, lh_vals_raw, rh_v, rh_f, rh_vals_raw, False,
+        views, layout, figsize, cmap, vminmax, nan_color, style, 
+        zoom, proc_vertices, display_type, export_path
+    )
 
 
-# --- plot for subcortical structures ---
+
+### PLOT FOR ATLAS-BASED SUBCORTICAL DATA ###
 
 def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, layout=None, 
                      figsize=(1000, 600), cmap='coolwarm', vminmax=[None, None], nan_color='#cccccc', 
-                     nan_alpha=1.0, legend=False, style='default', bmesh_type='midthickness', 
+                     nan_alpha=1.0, style='default', bmesh_type='midthickness', 
                      bmesh_alpha=0.1, bmesh_color='lightgray', zoom=1.2, display_type='static', 
                      export_path=None, custom_atlas_proc=dict(smooth_i=15, smooth_f=0.6)):
     """
@@ -377,8 +334,6 @@ def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, 
         Color for regions with no data (NaN). Default is light grey '#cccccc'.
     nan_alpha : float, optional
         Opacity (0.0 to 1.0) for regions with no data. Set to 0.0 to hide them.
-    legend : bool, optional
-        If True (and data is None), displays a legend of region names and colors.
     style : str, optional
         Lighting preset ('default', 'matte', 'glossy', 'sculpted', 'flat').
     bmesh_type : str or None, optional
@@ -414,11 +369,9 @@ def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, 
     # load context brain mesh (if requested)
     bmesh = {}
     if bmesh_type:
-        bmesh_path = _resolve_resource_path(bmesh_type, 'bmesh')
-        for h in ['L', 'R']:
-            fpath = os.path.join(bmesh_path, f'fs_LR.32k.{h}.{bmesh_type}.surf.gii')
-            if os.path.exists(fpath):
-                bmesh[h] = load_gii2pv(fpath)
+        b_lh_path, b_rh_path = get_surface_paths(bmesh_type, 'bmesh')
+        bmesh['L'] = load_gii2pv(b_lh_path)
+        bmesh['R'] = load_gii2pv(b_rh_path)
     
     # load regional atlas meshes
 
@@ -438,28 +391,27 @@ def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, 
             mesh = load_gii2pv(fpath, **custom_atlas_proc)
             meshes[name] = mesh
 
-    # prepare colors / map data
+    # prepare colors and map data
     if data is not None:
         d_data = prep_data(data, rmesh_names, atlas, 'subcortical')
-
         valid_vals = [v for v in d_data.values() if pd.notna(v)]
-        if vminmax[0] is None: vminmax[0] = min(valid_vals) if valid_vals else 0
-        if vminmax[1] is None: vminmax[1] = max(valid_vals) if valid_vals else 1
+        vmin = vminmax[0] if vminmax[0] is not None else (min(valid_vals) if valid_vals else 0)
+        vmax = vminmax[1] if vminmax[1] is not None else (max(valid_vals) if valid_vals else 1)
+        c_vlim = [vmin, vmax]
     else:
         colors = generate_distinct_colors(len(rmesh_names), seed=42)
         d_atlas_colors = {name: color for name, color in zip(rmesh_names, colors)}
+        c_vlim = [0, 1]
 
     # setup plotter
     sel_views = get_view_configs(views)
-    needs_bottom = (data is not None) or legend
+    needs_bottom = (data is not None)
     plotter, ncols, nrows = setup_plotter(sel_views, layout, figsize, display_type, 
                                            needs_bottom_row=needs_bottom)
     
     # get shading parameters from style
     shading_params = get_shading_preset(style)
-    
     scalar_bar_mapper = None
-    plotted_regions = {}
 
     # plotting loop
     for i, (view_name, cfg) in enumerate(sel_views.items()):
@@ -490,14 +442,13 @@ def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, 
                 mesh['Data'] = np.full(mesh.n_points, val)
                 
                 props.update({
-                    'scalars': 'Data', 'cmap': cmap, 'clim': vminmax,
+                    'scalars': 'Data', 'cmap': cmap, 'clim': c_vlim,
                     'nan_color': nan_color, 'opacity': 1.0 if has_val else nan_alpha, 
                     'show_scalar_bar': False
                 })
             else:
                 color = d_atlas_colors[name]
                 props.update({'color': color, 'opacity': 1.0})
-                plotted_regions[name] = color
 
             actor = plotter.add_mesh(mesh, **props)
             
@@ -507,26 +458,15 @@ def plot_subcortical(data=None, atlas=None, custom_atlas_path=None, views=None, 
         set_camera(plotter, cfg, zoom=zoom)
         plotter.hide_axes()
 
-    # bottom row: legend or colorbar
-    if needs_bottom:
-        plotter.subplot(nrows - 1, 0)
-        
-        if data is not None:
-            if scalar_bar_mapper:
-                plotter.add_scalar_bar(mapper=scalar_bar_mapper, title='', n_labels=5, 
-                                       vertical=False, position_x=0.3, position_y=0.25, 
-                                       height=0.5, width=0.4, color='black', 
-                                       label_font_size=20)
-        elif legend:
-            legend_entries = [[r, c] for r, c in plotted_regions.items()]
-            if legend_entries:
-                plotter.add_legend(legend_entries, size=(0.8, 0.8), bcolor=None)
+    # colorbar
+    if needs_bottom and scalar_bar_mapper:
+        add_colorbars(plotter, [scalar_bar_mapper], [''], nrows, figsize) 
 
     return finalize_plot(plotter, export_path, display_type)
 
 
 
-# --- plot for white matter tracts ---
+### PLOT FOR ATLAS-BASED WHITE MATTER TRACT DATA ###
 
 _TRACT_CACHE = {}
 def clear_tract_cache():
@@ -536,10 +476,9 @@ def clear_tract_cache():
     gc.collect()
     print("Tract cache cleared.")
 
-
 def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layout=None, 
                 figsize=(1000, 800), cmap='coolwarm', alpha=1.0, vminmax=[None, None], 
-                nan_color='#BDBDBD', nan_alpha=1.0, legend=False, style='default',
+                nan_color='#BDBDBD', nan_alpha=1.0, style='default',
                 bmesh_type='midthickness', bmesh_alpha=0.2, bmesh_color='lightgray', 
                 zoom=1.2, orientation_coloring=False, display_type='static', 
                 tract_kwargs=dict(render_lines_as_tubes=True, line_width=1.2),
@@ -581,8 +520,6 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
         Color for tracts with missing data (NaN). Default is grey '#BDBDBD'.
     nan_alpha : float, optional
         Opacity (0.0 to 1.0) for regions with no data. Set to 0.0 to hide them.
-    legend : bool, optional
-        If True (and data is None), displays a legend of region names and colors.
     style : str, optional
         Lighting preset ('default', 'matte', 'glossy', 'sculpted', 'flat').
     bmesh_type : str or None, optional
@@ -624,39 +561,35 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
     file_map = _find_tract_files(atlas_dir)
     tract_names = sorted(list(file_map.keys()))
 
-    # prepare colors / map data
+    # prepare colors and map data
     if data is not None:
         d_data = prep_data(data, tract_names, atlas, 'tracts')
-
         valid_vals = [v for v in d_data.values() if pd.notna(v)]
-        vmin = vminmax[0] if vminmax[0] is not None else min(valid_vals)
-        vmax = vminmax[1] if vminmax[1] is not None else max(valid_vals)
+        vmin = vminmax[0] if vminmax[0] is not None else (min(valid_vals) if valid_vals else 0)
+        vmax = vminmax[1] if vminmax[1] is not None else (max(valid_vals) if valid_vals else 1)
+        c_vlim = [vmin, vmax]
     # categorical/orientation mode
     else:
-        vmin, vmax = 0, 1 
         colors = generate_distinct_colors(len(tract_names), seed=42)
         d_atlas_colors = {name: color for name, color in zip(tract_names, colors)}
+        c_vlim = [0, 1]
 
     # load context brain mesh (if requested)
     bmesh = {}
     if bmesh_type:
-        bmesh_path = _resolve_resource_path(bmesh_type, 'bmesh')
-        for h in ['L', 'R']:
-            fpath = os.path.join(bmesh_path, f'fs_LR.32k.{h}.{bmesh_type}.surf.gii')
-            if os.path.exists(fpath):
-                bmesh[h] = load_gii2pv(fpath)
+        b_lh_path, b_rh_path = get_surface_paths(bmesh_type, 'bmesh')
+        bmesh['L'] = load_gii2pv(b_lh_path)
+        bmesh['R'] = load_gii2pv(b_rh_path)
 
     # setup plotter
     sel_views = get_view_configs(views)
-    needs_bottom = (data is not None and not orientation_coloring) or legend
+    needs_bottom = (data is not None and not orientation_coloring)
     plotter, ncols, nrows = setup_plotter(sel_views, layout, figsize, display_type, 
                                            needs_bottom_row=needs_bottom)
     plotter.enable_depth_peeling(number_of_peels=10)
     plotter.enable_anti_aliasing('msaa') # smooth lines
     shading_params = get_shading_preset(style)
-
     scalar_bar_mapper = None
-    plotted_regions = {} # for legend
 
     def _retrieve_tract_mesh(atlas_key, name, file_map):
         """
@@ -689,7 +622,7 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
             print(f"Failed to load tract {name}: {e}")
             return None
 
-    # plotting loop
+    # plotting
     cache_key = 'custom' if custom_atlas_path else atlas
     for i, (view_name, cfg) in enumerate(sel_views.items()):
         plotter.subplot(i // ncols, i % ncols)
@@ -731,47 +664,33 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
                 props.update({
                     'scalars': 'Data', 'rgb': True, 'opacity': alpha
                 })
-                legend_color = 'gray'
 
             elif data is not None:
                 pv_mesh['Data'] = np.full(pv_mesh.n_points, val)
                 current_opacity = alpha if has_value else nan_alpha
                 
                 props.update({
-                    'scalars': 'Data', 'cmap': cmap, 'clim': (vmin, vmax),
+                    'scalars': 'Data', 'cmap': cmap, 'clim': c_vlim,
                     'nan_color': nan_color, 'opacity': current_opacity, 'show_scalar_bar': False
                 })
-                legend_color = None
 
             else:
                 color = d_atlas_colors[name]
                 props.update({
                     'color': color, 'opacity': alpha
                 })
-                legend_color = color
 
             actor = plotter.add_mesh(pv_mesh, **props)
             
-            if legend_color: plotted_regions[name] = legend_color
             if data is not None and not orientation_coloring and scalar_bar_mapper is None and 'scalars' in props:
                 scalar_bar_mapper = actor.mapper
 
         set_camera(plotter, cfg, zoom=zoom, distance=150)
         plotter.hide_axes()
 
-    # bottom row: legend or colorbar
-    if needs_bottom:
-        plotter.subplot(nrows - 1, 0)
-        
-        if data is not None and not orientation_coloring:
-            if scalar_bar_mapper:
-                plotter.add_scalar_bar(mapper=scalar_bar_mapper, title='', n_labels=5, vertical=False,
-                                       position_x=0.3, position_y=0.25, height=0.5, width=0.4,
-                                       color='black', label_font_size=20)
-        elif legend and not orientation_coloring:
-            legend_entries = [[r, c] for r, c in plotted_regions.items()]
-            if legend_entries:
-                plotter.add_legend(legend_entries, size=(0.8, 0.8), bcolor=None)
+    # colorbar
+    if needs_bottom and scalar_bar_mapper:
+        add_colorbars(plotter, [scalar_bar_mapper], [''], nrows, figsize)
 
     # finalize
     ret_val = finalize_plot(plotter, export_path, display_type)
