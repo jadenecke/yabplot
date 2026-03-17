@@ -13,9 +13,13 @@ from .data import (
 
 from .utils import (
     load_gii, load_gii2pv, prep_data, 
-    generate_distinct_colors, parse_lut, map_values_to_surface, 
-    get_puzzle_pieces, apply_internal_blur, apply_dilation,
-    get_smooth_mask, lines_from_streamlines, make_cortical_mesh
+    generate_distinct_colors, parse_lut
+)
+
+from .mesh import (
+    map_values_to_surface, get_puzzle_pieces, apply_internal_blur, 
+    apply_dilation, get_smooth_mask, lines_from_streamlines, 
+    make_cortical_mesh
 )
 
 from .scene import (
@@ -258,11 +262,11 @@ def plot_vertexwise(lh, rh, scalars='Data', views=None, layout=None, figsize=(10
 
     See Also
     --------
-    yabplot.utils.load_vertexwise_mesh
+    yabplot.mesh.load_vertexwise_mesh
 
     Examples
     --------
-    >>> from yabplot.utils import load_vertexwise_mesh
+    >>> from yabplot.mesh import load_vertexwise_mesh
     >>> lh, rh = load_vertexwise_mesh(
     ...     fsaverage.pial_left, fsaverage.pial_right,
     ...     d_values_lh, d_values_rh

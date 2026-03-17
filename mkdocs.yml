@@ -67,4 +67,5 @@ nav:
   - API reference:
       - plotting functions: reference/plotting.md
       - helper utilities: reference/utils.md
+      - custom mesh building: reference/mesh.md
       - custom atlas building: reference/atlas_builder.md
