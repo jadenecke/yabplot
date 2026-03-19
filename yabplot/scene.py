@@ -137,6 +137,7 @@ def add_colorbars(plotter, mappers, titles, nrows, figsize):
     
     if num_bars == 1: 
         positions_y = [0.15] 
+        cb_height = 0.4
     elif num_bars == 2: 
         positions_y = [0.5, 0.01]
     else: 
@@ -147,7 +148,7 @@ def add_colorbars(plotter, mappers, titles, nrows, figsize):
             mapper=mapper, title=title, vertical=False, 
             position_x=pos_x, position_y=positions_y[i], 
             height=cb_height, width=cb_width, color='black', 
-            title_font_size=13, label_font_size=11, n_labels=5, fmt="%.2f"
+            title_font_size=13, label_font_size=11, n_labels=3, fmt="%g"
         )
 
 def finalize_plot(plotter, export_path, display_type):
