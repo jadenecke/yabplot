@@ -1,13 +1,13 @@
 # Utilities API
 
-::: yabplot.load_gii
+::: yabplot.data.get_atlas_regions
     options:
         show_root_heading: true
 
-::: yabplot.load_gii2pv
+::: yabplot.data.get_available_resources
     options:
         show_root_heading: true
 
-::: yabplot.array_to_gifti
+::: yabplot.data.get_surface_paths
     options:
         show_root_heading: true

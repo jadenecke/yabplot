@@ -7,13 +7,14 @@
 [![Tests](https://github.com/teanijarv/yabplot/actions/workflows/tests.yml/badge.svg)](https://github.com/teanijarv/yabplot/actions/workflows/tests.yml)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18237144.svg)](https://doi.org/10.5281/zenodo.18237144)
 
-**yabplot** is a Python library for creating beautiful, publication-quality 3D brain visualizations. it supports plotting cortical regions, subcortical structures, and white matter bundles.
+**yabplot** is a Python library for creating beautiful, publication-quality 3D brain visualizations. it supports plotting cortical regions (+ vertexwise), subcortical structures, and white matter bundles.
 
 the idea is simple. while there are already amazing visualization tools available, they often focus on specific domains—using one tool for white matter tracts and another for cortical surfaces inevitably leads to inconsistent styles. i wanted a unified, simple-to-use tool that enables me (and hopefully others) to perform most brain visualizations in a single place. recognizing that neuroscience evolves daily, i designed **yabplot** to be modular: it supports standard pre-packaged atlases out of the box, but easily accepts any custom parcellation or tractography dataset you might need.
 
 ## features
 
 * **pre-existing atlases:** access many commonly used atlases (schaefer2018, brainnetome, aparc, aseg, musus100, xtract, etc) on demand.
+* [new!] **vertexwise plotting:** project volume (.nii) to cortical surface and plot.
 * **simple to use:** plug-n-play functions for cortex, subcortex, and tracts with a unified API.
 * **custom atlases:** easily use your own parcellations, segmentations (.nii/.gii), or tractograms (.trk).
 * **flexible inputs:** accepts data as dictionaries (for partial mapping) or arrays (for strict mapping).

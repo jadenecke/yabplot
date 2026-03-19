@@ -11,3 +11,7 @@
 ::: yabplot.plot_tracts
     options:
         show_root_heading: true
+
+::: yabplot.plot_vertexwise
+    options:
+        show_root_heading: true

@@ -1,5 +1,4 @@
 import os
-import tempfile
 import warnings
 
 import numpy as np
@@ -9,68 +8,7 @@ import pyvista as pv
 import scipy.sparse as sp
 from scipy.ndimage import map_coordinates
 
-from typing import Literal
-
-from .wrappers import run_wb_resample
-from .utils import array_to_gifti, load_gii
-
-def resample_fsaverage(
-    input_lh: np.ndarray | str,
-    input_rh: np.ndarray | str,
-    source_template: Literal[
-        "fsaverage", "fsaverage4", "fsaverage5", "fsaverage6"
-    ] = "fsaverage5",
-) -> tuple[np.ndarray, np.ndarray]:
-    """Resample fsaverage surface data to fs_LR 32k space.
-
-    Parameters
-    ----------
-    input_lh : np.ndarray | str
-        Left hemisphere data as a 1D vertex array or path to a .func.gii file.
-    input_rh : np.ndarray | str
-        Right hemisphere data as a 1D vertex array or path to a .func.gii file.
-    source_template : str
-        Source fsaverage template. Default is 'fsaverage5'.
-
-    Returns
-    -------
-    tuple[np.ndarray, np.ndarray]
-        Resampled left and right hemisphere arrays in fs_LR 32k space.
-    """
-    # this won't be necessary
-    surface_path = (
-        "./HCPpipelines/global/templates/standard_mesh_atlases/resample_fsaverage/"
-    )
-
-    hemis = ["L", "R"]
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        paths = []
-        for arr_or_path, hemi in zip([input_lh, input_rh], hemis):
-            if isinstance(arr_or_path, np.ndarray):
-                fpath = os.path.join(tmp_dir, f"data_{hemi}.func.gii")
-                array_to_gifti(arr_or_path, fpath)
-                paths.append(fpath)
-            else:
-                paths.append(arr_or_path)
-
-        for hemi, data_path in zip(hemis, paths):
-            source_sphere = f"{source_template}_std_sphere.{hemi}.10k_fsavg_{hemi}.surf.gii"
-            target_sphere = f"fs_LR-deformed_to-fsaverage.{hemi}.sphere.32k_fs_LR.surf.gii"
-            source_area = f"{source_template}.{hemi}.midthickness_va_avg.10k_fsavg_{hemi}.shape.gii"
-            target_area = f"fs_LR.{hemi}.midthickness_va_avg.32k_fs_LR.shape.gii"
-            run_wb_resample(
-                input_gii=data_path,
-                input_sphere=os.path.join(surface_path, source_sphere),
-                output_sphere=os.path.join(surface_path, target_sphere),
-                output_gii=os.path.join(tmp_dir, f"data.{hemi}.32k_fs_LR.func.gii"),
-                input_midthickness=os.path.join(surface_path, source_area),
-                output_midthickness=os.path.join(surface_path, target_area),
-            )
-
-        lh_out = nib.load(os.path.join(tmp_dir, "data.L.32k_fs_LR.func.gii")).darrays[0].data
-        rh_out = nib.load(os.path.join(tmp_dir, "data.R.32k_fs_LR.func.gii")).darrays[0].data
-
-    return lh_out, rh_out
+from .utils import load_gii
     
 def make_cortical_mesh(verts, faces, scalars, scalar_name='Data'):
     """

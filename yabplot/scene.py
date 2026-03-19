@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pyvista as pv
+import warnings
 
 def get_shading_preset(style_name):
     """
@@ -151,7 +152,21 @@ def add_colorbars(plotter, mappers, titles, nrows, figsize):
 
 def finalize_plot(plotter, export_path, display_type):
     if export_path: 
-        plotter.screenshot(export_path, transparent_background=True)
+        ext = os.path.splitext(export_path)[1].lower()
+        vector_formats = ['.svg', '.eps', '.ps', '.pdf', '.tex']
+        raster_formats = ['.png', '.jpeg', '.jpg', '.bmp', '.tiff']
+        
+        # save as vector graphic or rasterized image
+        if ext in vector_formats:
+            plotter.save_graphic(export_path)
+        elif ext in raster_formats:
+            plotter.screenshot(export_path, transparent_background=True)
+        else:
+            supported = vector_formats + raster_formats
+            warnings.warn(
+                f"[WARNING] unsupported export extension '{ext}'. file not saved. "
+                f"supported formats are: {', '.join(supported)}"
+            )
     
     if display_type == 'static': 
         out = plotter.show(jupyter_backend='static')

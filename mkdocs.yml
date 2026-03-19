@@ -66,6 +66,7 @@ nav:
       - (advanced) using custom cortical atlas: tutorials/custom_cortical_atlas.ipynb
   - API reference:
       - plotting functions: reference/plotting.md
+      - data functions: reference/data.md
       - helper utilities: reference/utils.md
-      - custom mesh building: reference/mesh.md
+      - mesh utilities: reference/mesh.md
       - custom atlas building: reference/atlas_builder.md
