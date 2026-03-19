@@ -34,3 +34,15 @@ def run_wb_projection(input_nii, midthickness, output_gii, white, pial):
         "-ribbon-constrained", white, pial
     ]
     subprocess.run(cmd, check=True)
+
+def run_wb_resample(input_gii, input_sphere, output_sphere, output_gii, 
+                    input_midthickness, output_midthickness):
+    """Wrapper for wb_command -metric-resample"""
+    check_workbench()
+    cmd = [
+        "wb_command", "-metric-resample",
+        input_gii, input_sphere, output_sphere,
+        "ADAP_BARY_AREA", output_gii,
+        "-area-metrics", input_midthickness, output_midthickness
+    ]
+    subprocess.run(cmd, check=True)
