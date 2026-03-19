@@ -1,17 +1,17 @@
 # Plotting API
 
-::: yabplot.plot_cortical
+::: yabplot.plotting.plot_cortical
     options:
         show_root_heading: true
 
-::: yabplot.plot_subcortical
+::: yabplot.plotting.plot_subcortical
     options:
         show_root_heading: true
 
-::: yabplot.plot_tracts
+::: yabplot.plotting.plot_tracts
     options:
         show_root_heading: true
 
-::: yabplot.plot_vertexwise
+::: yabplot.plotting.plot_vertexwise
     options:
         show_root_heading: true

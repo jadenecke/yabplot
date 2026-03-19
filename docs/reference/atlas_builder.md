@@ -1,9 +1,9 @@
 # Plotting API
 
-::: yabplot.build_cortical_atlas
+::: yabplot.atlas_builder.build_cortical_atlas
     options:
         show_root_heading: true
 
-::: yabplot.build_subcortical_atlas
+::: yabplot.atlas_builder.build_subcortical_atlas
     options:
         show_root_heading: true

@@ -1,13 +1,13 @@
 # Utilities API
 
-::: yabplot.load_gii
+::: yabplot.utils.load_gii
     options:
         show_root_heading: true
 
-::: yabplot.load_gii2pv
+::: yabplot.utils.load_gii2pv
     options:
         show_root_heading: true
 
-::: yabplot.array_to_gifti
+::: yabplot.utils.array_to_gifti
     options:
         show_root_heading: true
