@@ -57,7 +57,7 @@ def prep_data(data, regions, atlas, category):
     if isinstance(data, pd.DataFrame):
         if data.shape[1] >= 2:
             data = dict(zip(data.iloc[:, 0], data.iloc[:, 1]))
-    elif isinstance(data, pd.Series): #done
+    elif isinstance(data, pd.Series):
         data = data.to_dict()
     elif isinstance(data, (list, np.ndarray, tuple)):
         if len(data) != len(regions):
@@ -71,11 +71,10 @@ def prep_data(data, regions, atlas, category):
         data = dict(zip(regions, data))
 
     #resolve any present tsf paths:
-    if isinstance(data, dict): #done
+    if isinstance(data, dict):
         for key, value in data.items():
             if isinstance(value, str):
                 data[key] = read_tsf(value)
-        return data
 
     return data
 
