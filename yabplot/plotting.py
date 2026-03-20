@@ -12,8 +12,8 @@ from .data import (
 )
 
 from .utils import (
-    load_gii, load_gii2pv, prep_data, 
-    generate_distinct_colors, parse_lut
+    load_gii, load_gii2pv, prep_data,
+    generate_distinct_colors, parse_lut, flatten
 )
 
 from .mesh import (
@@ -496,7 +496,7 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
     Parameters
     ----------
     data : dict, list, numpy.ndarray, pandas.Series, pandas.DataFrame, optional
-        Scalar values for each tract.
+        Scalar values for each tract, or mrtrix3 derived .tsf file path for each tract.
         If dict: Keys must match tract names.
         If array/list: Must strictly match the sorted list of tracts in the atlas.
         If None: Tracts are colored by category (distinct colors) or orientation.
@@ -568,7 +568,7 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
     # prepare colors and map data
     if data is not None:
         d_data = prep_data(data, tract_names, atlas, 'tracts')
-        valid_vals = [v for v in d_data.values() if pd.notna(v)]
+        valid_vals = flatten([v for v in d_data.values() if all(pd.notna(v))])
         vmin = vminmax[0] if vminmax[0] is not None else (min(valid_vals) if valid_vals else 0)
         vmax = vminmax[1] if vminmax[1] is not None else (max(valid_vals) if valid_vals else 1)
         c_vlim = [vmin, vmax]
@@ -641,7 +641,7 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
             val = np.nan
             
             if data is not None and not orientation_coloring:
-                if name in d_data and pd.notna(d_data[name]):
+                if name in d_data and all(pd.notna(d_data[name])):
                     val = d_data[name]
                     has_value = True
                 elif nan_alpha == 0:
@@ -661,16 +661,29 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
 
             # start with style presets, then override with tract_kwargs and dynamic props
             props = shading_params.copy()
-            props.update(tract_kwargs) 
-            
+            props.update(tract_kwargs)
+
             if orientation_coloring:
                 pv_mesh['Data'] = pv_mesh.point_data['tangents']
+
                 props.update({
                     'scalars': 'Data', 'rgb': True, 'opacity': alpha
                 })
 
             elif data is not None:
-                pv_mesh['Data'] = np.full(pv_mesh.n_points, val)
+                if len(val) == 1:
+                    pv_mesh['Data'] = np.full(pv_mesh.n_points, val)
+                elif len(val) == pv_mesh.n_points:
+                    pv_mesh['Data'] = val
+                elif data == np.nan:
+                    pv_mesh['Data'] = np.full(pv_mesh.n_points, np.nan)
+                else:
+                    raise ValueError(
+                        "Data shape is not applicable for this mesh. Must be 1D or equal to n_points."
+                        f"Shape of data: {np.shape(val)}"
+                        f"Number of points: {pv_mesh.n_points}"
+                    )
+
                 current_opacity = alpha if has_value else nan_alpha
                 
                 props.update({
