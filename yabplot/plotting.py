@@ -568,7 +568,7 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
     # prepare colors and map data
     if data is not None:
         d_data = prep_data(data, tract_names, atlas, 'tracts')
-        valid_vals = flatten([v for v in d_data.values() if all(pd.notna(v))])
+        valid_vals = flatten([v for v in d_data.values() if np.all(pd.notna(v))])
         vmin = vminmax[0] if vminmax[0] is not None else (min(valid_vals) if valid_vals else 0)
         vmax = vminmax[1] if vminmax[1] is not None else (max(valid_vals) if valid_vals else 1)
         c_vlim = [vmin, vmax]
@@ -671,16 +671,19 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
                 })
 
             elif data is not None:
-                if len(val) == 1:
-                    pv_mesh['Data'] = np.full(pv_mesh.n_points, val)
+                if np.isscalar(val):
+                    if pd.isna(val):
+                        pv_mesh['Data'] = np.full(pv_mesh.n_points, np.nan)
+                    else:
+                        pv_mesh['Data'] = np.full(pv_mesh.n_points, val)
+                elif len(val) == 1:
+                    pv_mesh['Data'] = np.full(pv_mesh.n_points, val[0])
                 elif len(val) == pv_mesh.n_points:
                     pv_mesh['Data'] = val
-                elif data == np.nan:
-                    pv_mesh['Data'] = np.full(pv_mesh.n_points, np.nan)
                 else:
                     raise ValueError(
-                        "Data shape is not applicable for this mesh. Must be 1D or equal to n_points."
-                        f"Shape of data: {np.shape(val)}"
+                        "Data shape is not applicable for this mesh. Must be 1D or equal to n_points. "
+                        f"Shape of data: {np.shape(val)}. "
                         f"Number of points: {pv_mesh.n_points}"
                     )
 
