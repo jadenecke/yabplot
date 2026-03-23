@@ -568,7 +568,7 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
     # prepare colors and map data
     if data is not None:
         d_data = prep_data(data, tract_names, atlas, 'tracts')
-        valid_vals = flatten([v for v in d_data.values() if all(pd.notna(v))])
+        valid_vals = flatten([v for v in d_data.values() if np.all(pd.notna(v))])
         vmin = vminmax[0] if vminmax[0] is not None else (min(valid_vals) if valid_vals else 0)
         vmax = vminmax[1] if vminmax[1] is not None else (max(valid_vals) if valid_vals else 1)
         c_vlim = [vmin, vmax]
