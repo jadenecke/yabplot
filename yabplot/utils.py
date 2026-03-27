@@ -112,13 +112,13 @@ def parse_lut(lut_path):
 
 
 def read_tsf(tsf_path: str) -> list[int | float]:
-    """Read an MRtrix3 .tsf (Track Scalar File)."""
+    """read an MRtrix3 .tsf (track scalar file)."""
     if not os.path.isfile(tsf_path):
         raise FileNotFoundError(f"File not found: {tsf_path}")
     header: dict[str, str] = {}
     data_offset: int | None = None
     with open(tsf_path, "rb") as fh:
-        # First line must be the magic string
+        # first line must be the magic string
         magic_line = fh.readline().decode("ascii", errors="replace").strip()
         if not magic_line.lower().startswith("mrtrix track scalars"):
             raise ValueError(
@@ -137,14 +137,14 @@ def read_tsf(tsf_path: str) -> list[int | float]:
             if line == "END":
                 break
 
-            # Parse "key: value" pairs
+            # parse "key: value" pairs
             colon_pos = line.find(":")
             if colon_pos > 0:
                 key = line[:colon_pos].strip()
                 value = line[colon_pos + 1 :].strip()
                 header[key] = value
 
-                # Capture the data offset
+                # capture the data offset
                 if key.lower() == "file":
                     # Value is typically ". <offset>"
                     parts = value.split()
@@ -156,11 +156,11 @@ def read_tsf(tsf_path: str) -> list[int | float]:
                 "('file' key missing)."
             )
 
-        # 2. Read the binary data -------------------------------------
+        # 2. read the binary data -------------------------------------
         fh.seek(data_offset)
         raw_bytes = fh.read()
 
-    # Determine byte order from header (default: Float32LE)
+    # determine byte order from header (default: Float32LE)
     datatype = header.get("datatype", "Float32LE").lower()
     byte_order = ">" if datatype.endswith("be") else "<"
 
@@ -169,12 +169,12 @@ def read_tsf(tsf_path: str) -> list[int | float]:
     else:
         dtype = np.dtype(f"{byte_order}f4")
 
-    # Trim any trailing bytes that don't fill a complete element
+    # trim any trailing bytes that don't fill a complete element
     element_size = dtype.itemsize
     usable = len(raw_bytes) - (len(raw_bytes) % element_size)
     raw_data = np.frombuffer(raw_bytes[:usable], dtype=dtype)
 
-    # --- 3. Split into per-streamline vectors ----------------------------
+    # --- 3. split into per-streamline vectors ----------------------------
     #   NaN  → streamline separator
     #   Inf  → end-of-file marker
     inf_mask = np.isinf(raw_data)
@@ -183,7 +183,7 @@ def read_tsf(tsf_path: str) -> list[int | float]:
         raw_data = raw_data[: inf_indices[0]]
 
     nan_mask = np.isnan(raw_data)
-    # Indices where NaN occurs mark the *end* of each streamline
+    # indices where NaN occurs mark the *end* of each streamline
     split_indices = np.where(nan_mask)[0]
     # however we need a flat list anyways for plotting: remove NaNs
     data = raw_data[~nan_mask].tolist()
