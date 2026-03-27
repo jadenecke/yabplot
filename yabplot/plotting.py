@@ -641,7 +641,7 @@ def plot_tracts(data=None, atlas=None, custom_atlas_path=None, views=None, layou
             val = np.nan
             
             if data is not None and not orientation_coloring:
-                if name in d_data and all(pd.notna(d_data[name])):
+                if name in d_data and np.all(pd.notna(d_data[name])):
                     val = d_data[name]
                     has_value = True
                 elif nan_alpha == 0:
