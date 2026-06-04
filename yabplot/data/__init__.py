@@ -225,7 +225,9 @@ def _resolve_resource_path(name, category, custom_path=None):
     if custom_path:
         if os.path.isdir(custom_path):
             return custom_path
-        raise FileNotFoundError(f"Custom atlas directory not found: {custom_path}")
+        if os.path.isfile(custom_path):
+            return custom_path
+        raise FileNotFoundError(f"Custom atlas directory/file not found: {custom_path}")
 
     # 2. standard download logic
     resource_key = f"{category}-{name}.zip"
@@ -403,8 +405,15 @@ def _find_tract_files(atlas_dir):
             
         return candidates
 
-    # scan for both .trk and .tck
-    found_files = _scan_for_ext(atlas_dir, ".trk") + _scan_for_ext(atlas_dir, ".tck")
+    if  os.path.isdir(atlas_dir):
+        # scan for both .trk and .tck
+        found_files = _scan_for_ext(atlas_dir, ".trk") + _scan_for_ext(atlas_dir, ".tck")
+    elif os.path.isfile(atlas_dir):
+        if atlas_dir.endswith((".trk", ".tck")):
+            found_files = [atlas_dir]
+    else:
+        raise ValueError(f"Invalid atlas directory/file path: {atlas_dir}, no valid tck or trk file found.")
+
     
     if not found_files:
         raise FileNotFoundError(f"No .trk or .tck files found in {atlas_dir}")
