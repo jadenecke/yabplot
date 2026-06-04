@@ -1,4 +1,4 @@
-# Plotting API
+# atlas builder API
 
 ::: yabplot.atlas_builder.build_cortical_atlas
     options:

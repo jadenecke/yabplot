@@ -1,4 +1,4 @@
-# Plotting API
+# plotting API
 
 ::: yabplot.plotting.plot_cortical
     options:
@@ -12,6 +12,14 @@
     options:
         show_root_heading: true
 
+::: yabplot.plotting.plot_voxelwise
+    options:
+        show_root_heading: true
+
 ::: yabplot.plotting.plot_vertexwise
+    options:
+        show_root_heading: true
+
+::: yabplot.plotting.plot_connectome
     options:
         show_root_heading: true

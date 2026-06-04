@@ -1,4 +1,4 @@
-# Utilities API
+# data API
 
 ::: yabplot.data.get_atlas_regions
     options:

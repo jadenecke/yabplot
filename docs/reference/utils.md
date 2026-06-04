@@ -1,4 +1,4 @@
-# Utilities API
+# utilities API
 
 ::: yabplot.utils.load_gii
     options:
@@ -9,5 +9,9 @@
         show_root_heading: true
 
 ::: yabplot.utils.array_to_gifti
+    options:
+        show_root_heading: true
+
+::: yabplot.utils.load_tsf
     options:
         show_root_heading: true

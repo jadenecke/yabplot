@@ -1,14 +1,59 @@
-import os
 import warnings
 
-import numpy as np
 import nibabel as nib
+import numpy as np
 import pyvista as pv
-
 import scipy.sparse as sp
-from scipy.ndimage import map_coordinates
+from scipy.ndimage import gaussian_filter
+from skimage import measure
+from concurrent.futures import ThreadPoolExecutor
 
-from .utils import load_gii
+def load_bmesh(bmesh):
+    """
+    Transforms the `bmesh` parameter into a standardized dictionary of PyVista PolyData meshes.
+
+    Parameters
+    ----------
+    bmesh : None, str, dict, or pyvista.PolyData
+        - None: Returns an empty dictionary (disables background mesh).
+        - str: Fetches standard meshes from the registry (e.g., 'midthickness').
+        - dict: Maps custom meshes to 'L' and 'R' keys. Values can be pre-loaded 
+          PyVista PolyData objects or string file paths (which are auto-loaded).
+        - pyvista.PolyData: A single unified mesh, mapped to the 'both' key.
+
+    Returns
+    -------
+    dict
+        Standardized dictionary containing the loaded PyVista meshes.
+    """
+    from .data import get_surface_paths
+    from .utils import load_gii2pv
+
+    if bmesh is None:
+        return {}
+    if isinstance(bmesh, str):
+        lh_path, rh_path = get_surface_paths(bmesh, 'bmesh')
+        return {'L': load_gii2pv(lh_path), 'R': load_gii2pv(rh_path)}
+    if isinstance(bmesh, dict):
+        clean_dict = {}
+        for k, v in bmesh.items():
+            if isinstance(v, str):
+                if v.endswith('.gii') or v.endswith('.gii.gz'):
+                    v = load_gii2pv(v)
+                else:
+                    v = pv.read(v)
+            if k.upper() in ['L', 'LEFT']: clean_dict['L'] = v
+            elif k.upper() in ['R', 'RIGHT']: clean_dict['R'] = v
+            else: clean_dict[k] = v
+        return clean_dict
+    
+    return {'both': bmesh}
+
+def extract_polydata(mesh_hemi: pv.PolyData):
+    """Return vertices and rotated faces for plotting."""
+    v = mesh_hemi.points
+    f = mesh_hemi.faces.reshape(-1, 4)[:, 1:]
+    return v, f
     
 def make_cortical_mesh(verts, faces, scalars, scalar_name='Data'):
     """
@@ -60,10 +105,81 @@ def load_vertexwise_mesh(lh_mesh_path, rh_mesh_path, lh_data, rh_data, scalar_na
     lh_mesh, rh_mesh : tuple of pyvista.PolyData
         left and right hemisphere meshes ready for `yabplot.plotting.plot_vertexwise`.
     """
+    from .utils import load_gii
     lh = make_cortical_mesh(*load_gii(lh_mesh_path), lh_data, scalar_name)
     rh = make_cortical_mesh(*load_gii(rh_mesh_path), rh_data, scalar_name)
     return lh, rh
 
+def load_nii_as_mesh(
+    nii_path,
+    threshold=0.5,
+    blur_sigma=1.5,
+    smooth_i=10,
+    smooth_f=0.1
+):
+    """
+    Build a surface mesh from a 3D NIfTI volume using marching cubes, with optional Gaussian blurring and mesh smoothing.
+
+    Parameters
+    ----------
+    nii_path : str
+        Absolute path to a NIfTI file representing a 3D volume. If 4D, only the first volume will be used.
+    threshold : float, optional
+        Threshold applied after optional blur. Voxels ``> threshold`` are kept.
+    blur_sigma : float, optional
+        Gaussian blur (voxel units) before thresholding.
+    smooth_i : int, optional
+        Number of PyVista smoothing iterations after surface extraction.
+    smooth_f : float, optional
+        Relaxation factor for mesh smoothing.
+
+    Returns
+    -------
+    mesh : pyvista.PolyData
+        The extracted and smoothed surface mesh ready for plotting.
+    """
+
+    img = nib.load(nii_path)
+    vol = img.get_fdata()
+
+    if vol.ndim > 3:
+        warnings.warn(
+            f"[WARNING] detected {vol.ndim}d nifti volume. using the first volume (index 0)."
+        )
+        vol = vol[..., 0]
+
+    vol = np.nan_to_num(vol, nan=0.0)
+
+    if blur_sigma and blur_sigma > 0:
+        vol = gaussian_filter(vol, sigma=float(blur_sigma))
+
+    mask = vol > float(threshold)
+
+    if not np.any(mask):
+        raise ValueError("Mask is empty after thresholding. Adjust threshold/blur_sigma.")
+
+    verts_vox, faces, _, _ = measure.marching_cubes(mask.astype(np.float32), level=0.5)
+    verts_world = nib.affines.apply_affine(img.affine, verts_vox)
+
+    faces_pv = np.hstack([
+        np.full((faces.shape[0], 1), 3, dtype=np.int64),
+        faces.astype(np.int64)
+    ]).ravel()
+    mesh = pv.PolyData(verts_world.astype(np.float32), faces_pv)
+
+    if smooth_i and smooth_i > 0:
+        mesh = mesh.smooth(n_iter=int(smooth_i), relaxation_factor=float(smooth_f))
+
+    if mesh.n_points == 0:
+        raise ValueError("Extracted mesh has no vertices. Check input mask and parameters.")
+
+    # fill topological holes in the extracted meshes
+    try:
+        mesh = mesh.fill_holes(1000)
+    except Exception as e:
+        warnings.warn(f"Mesh hole filling failed: {e}. Continuing with unfilled meshes.")
+
+    return mesh
 
 def map_values_to_surface(data, target_labels, lut_ids, dense_lut_names):
     """maps data to vertices."""
@@ -164,35 +280,60 @@ def apply_dilation(faces, data, iterations=4):
     return data_out
 
 
+def get_smooth_masks_vectorized(faces, n_v, r_masks, iterations=4):
+    adj = get_adj(faces, n_v)
+    deg = np.array(adj.sum(axis=1)).flatten()
+    deg[deg == 0] = 1.0
+    mask = r_masks.astype(np.float64)
+    for _ in range(iterations):
+        mask = (mask + (adj.dot(mask) / deg[:, None])) / 2.0
+    return mask
+
 def get_puzzle_pieces(v, f, raw_vals):
-    """carve out geometric pieces with slight overlap to prevent gaps."""
-    pieces = []
+    """
+    Creates sharp boundaries without gaps by calculating smooth probability fields
+    and interpolating them onto a highly subdivided continuous mesh.
+    """
     valid_mask = ~np.isnan(raw_vals) & (raw_vals != 0.0)
     u_vals = np.unique(raw_vals[valid_mask])
-    master = make_cortical_mesh(v, f, np.zeros_like(raw_vals))
-
-    for val in u_vals:
-        r_mask = np.where(raw_vals == val, 1.0, 0.0)
-        s_mask = get_smooth_mask(f, r_mask, iterations=4)
-        temp = master.copy()
-        temp['Slice_Mask'] = s_mask
-        # reduce search space
-        patch = temp.threshold(0.01, scalars='Slice_Mask')
-        if patch.n_points > 0:
-            # use 0.48 (slightly expanded) for pieces to seal cracks
-            piece = patch.clip_scalar(scalars='Slice_Mask', value=0.48, invert=False)
-            if piece.n_points > 0:
-                piece['Data'] = np.full(piece.n_points, val)
-                pieces.append(piece)
     
-    # slice base brain
-    all_mask = np.where(valid_mask, 1.0, 0.0)
-    s_all = get_smooth_mask(f, all_mask, iterations=4)
-    master['Slice_Mask'] = s_all
-    # use 0.52 (slightly contracted) for the hole to ensure colored pieces cover the edge
-    base_p = master.clip_scalar(scalars='Slice_Mask', value=0.52, invert=True)
-    if base_p.n_points > 0:
-        base_p['Data'] = np.full(base_p.n_points, np.nan)
+    # if no data, skip
+    if len(u_vals) == 0:
+        master = make_cortical_mesh(v, f, np.full(len(v), np.nan))
+        return pv.PolyData(), [master]
+    
+    n_v = len(v)
+    n_k = len(u_vals)
+    
+    # vectorized smoothing
+    r_masks = np.zeros((n_v, n_k + 1), dtype=np.float64)
+    r_masks[:, 0] = np.where(~valid_mask, 1.0, 0.0) # medial wall
+    for i, val in enumerate(u_vals):
+        r_masks[:, i+1] = np.where(raw_vals == val, 1.0, 0.0)
+    
+    s_masks = get_smooth_masks_vectorized(f, n_v, r_masks, iterations=4)
+    
+    master = make_cortical_mesh(v, f, np.zeros_like(raw_vals))
+    master['Masks'] = s_masks
+    
+    # subdivide to increase resolution (2 levels = 16x faces)
+    sub = master.subdivide(2, subfilter='linear')
+    
+    # assign labels to high-res vertices
+    interp_masks = sub['Masks']
+    best_class = np.argmax(interp_masks, axis=1)
+    new_data = np.full(sub.n_points, np.nan)
+    valid_idx = best_class > 0
+    
+    # map the argmax indices back to their original scalar values
+    new_data[valid_idx] = u_vals[best_class[valid_idx] - 1]
+    sub['Data'] = new_data
+    
+    # clean up multi-component array to save memory
+    del sub.point_data['Masks']
+    
+    base_p = pv.PolyData()
+    pieces = [sub]
     
     return base_p, pieces
 
@@ -222,89 +363,3 @@ def lines_from_streamlines(streamlines):
         tangents.append(vecs / norms)
         
     return points, lines, np.vstack(tangents)
-
-
-def project_vol2surf(nii_path, bmesh_type='midthickness', custom_bmesh_paths=None, 
-                     mask_medial_wall=True, interpolation='linear'):
-    """
-    Projects a 3D NIfTI volume onto 2D cortical surface vertices.
-
-    It maps volumetric data directly onto surface meshes by converting real-world coordinates 
-    using the image affine and sampling the data array at those exact points.
-
-    Parameters
-    ----------
-    nii_path : str
-        absolute path to the 3D or 4D NIfTI volume. 
-        if 4D, only the first volume/timepoint is used.
-    bmesh_type : str, optional
-        name of the standard background mesh to use for projection coordinates. 
-        default is 'midthickness'.
-    custom_bmesh_paths : tuple of str, optional
-        custom paths for (lh_mesh, rh_mesh) if not using standard yabplot meshes.
-        default is None.
-    mask_medial_wall : bool, optional
-        whether to automatically set the medial wall vertices to NaN to prevent 
-        subcortical signal from bleeding onto the cortical surface. 
-        default is True.
-    interpolation : {'linear', 'nearest'}, optional
-        interpolation method for sampling the volume. 'linear' performs trilinear 
-        interpolation (smoother, good for continuous t-stats), while 'nearest' 
-        snaps to the closest voxel center (strictly required for p-values or atlases). 
-        default is 'linear'.
-
-    Returns
-    -------
-    lh_data : numpy.ndarray
-        1D array of projected values for the left hemisphere vertices.
-    rh_data : numpy.ndarray
-        1D array of projected values for the right hemisphere vertices.
-    """
-    from .data import get_surface_paths
-
-    # load volume
-    img = nib.load(nii_path)
-    vol_data = img.get_fdata()
-    
-    # check for 4d data (e.g. raw fmri timeseries)
-    if vol_data.ndim > 3:
-        warnings.warn(f"[WARNING] detected {vol_data.ndim}d nifti volume. using the first volume (index 0).")
-        vol_data = vol_data[..., 0] 
-        
-    # invert affine to go from real-world mm space back to voxel indices
-    inv_affine = np.linalg.inv(img.affine)
-
-    # resolve surfaces
-    if custom_bmesh_paths:
-        lh_path, rh_path = custom_bmesh_paths
-    else:
-        lh_path, rh_path = get_surface_paths(bmesh_type, 'bmesh')
-        
-    lh_v, _ = load_gii(lh_path)
-    rh_v, _ = load_gii(rh_path)
-
-    def sample_surface(vertices, volume, inv_aff, interp):
-        # convert [x, y, z] to [x, y, z, 1] to allow 4x4 affine matrix multiplication
-        coords_homo = np.hstack((vertices, np.ones((vertices.shape[0], 1))))
-        
-        # multiply by inverse affine to get exact decimal voxel coordinates
-        vox_coords = inv_aff.dot(coords_homo.T)[:3, :]
-        
-        # set scipy interpolation order (1 = trilinear, 0 = nearest neighbor)
-        order = 1 if interp == 'linear' else 0
-        
-        # sample the 3d volume at the calculated decimal coordinates
-        sampled_data = map_coordinates(volume, vox_coords, order=order, mode='nearest')
-        return sampled_data
-
-    # projection
-    lh_data = sample_surface(lh_v, vol_data, inv_affine, interpolation)
-    rh_data = sample_surface(rh_v, vol_data, inv_affine, interpolation)
-
-    # mask out the medial wall (optional but default true)
-    if mask_medial_wall:
-        lh_mask_path, rh_mask_path = get_surface_paths('nomedialwall', 'label')
-        lh_data[nib.load(lh_mask_path).darrays[0].data == 0] = np.nan
-        rh_data[nib.load(rh_mask_path).darrays[0].data == 0] = np.nan
-
-    return lh_data, rh_data

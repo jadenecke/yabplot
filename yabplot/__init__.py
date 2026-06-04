@@ -2,7 +2,8 @@ from importlib.metadata import version, PackageNotFoundError
 
 from .plotting import (
     plot_cortical, plot_subcortical, plot_tracts, 
-    clear_tract_cache, plot_vertexwise
+    clear_cache, plot_vertexwise, plot_connectome,
+    plot_voxelwise
 )
 from .data import (
     get_available_resources, get_atlas_regions
@@ -11,7 +12,10 @@ from .atlas_builder import (
     build_cortical_atlas, build_subcortical_atlas
 )
 from .mesh import (
-    load_vertexwise_mesh, project_vol2surf
+    load_vertexwise_mesh, make_cortical_mesh, load_nii_as_mesh
+)
+from .projection import (
+    project_vol2surf, project_vol2tract, project_vol2tract_atlas
 )
 
 try:
